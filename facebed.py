@@ -388,7 +388,6 @@ class JsonParser:
 
     @staticmethod
     def process_post(post_path: str) -> ParsedPost:
-        logging.info(f'using proxy: {config["proxy"]}' if config['proxy'] else 'no proxy used')
         http_response = requests.get(JsonParser.ensure_full_url(post_path),
                                      headers=JsonParser.get_headers(), cookies=acc.get_cookies(),
                                      proxies={'http': config['proxy'], 'https': config['proxy']} if config['proxy'] else None)
@@ -396,7 +395,6 @@ class JsonParser:
         html_parser = BeautifulSoup(http_response.text, 'html.parser')
 
         post_json = JsonParser.get_root_node(JsonParser.get_post_json(html_parser))
-        logging.info(f'post json keys: {list(post_json.keys())} for {post_path}')
         likes, cmts, shares = JsonParser.get_interaction_counts(post_json)
         # noinspection PyTypeChecker
         post_date = int(Jq.first(post_json['context_layout']['story']['comet_sections']['metadata'], 'creation_time'))
@@ -791,8 +789,6 @@ def main():
 
         with open(args.config, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-        logging.info(f'loaded config from {args.config}')
-        logging.info(f'config contents: {config}')
         for dk in default_config:
             if dk not in config:
                 config[dk] = default_config[dk]
