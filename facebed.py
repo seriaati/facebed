@@ -30,6 +30,7 @@ port: 9812
 timezone: 7
 banned_users: []
 banned_notifier_webhook: ''
+proxy: ''
 '''.strip()
 
 config: dict = {}
@@ -41,7 +42,6 @@ WWWFB = 'https://www.facebook.com'
 TZ_OFFSET: int = 0
 ALLOW_UPDATE = True
 logging.basicConfig(format='[%(levelname)s] [%(asctime)s] %(msg)s', level=logging.INFO)
-logging.info(f'proxy set to: {proxy}' if proxy else 'no proxy set')
 
 def quote(s: str) -> str:
     return "".join([
