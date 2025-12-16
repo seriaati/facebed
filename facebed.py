@@ -41,7 +41,7 @@ WWWFB = 'https://www.facebook.com'
 TZ_OFFSET: int = 0
 ALLOW_UPDATE = True
 logging.basicConfig(format='[%(levelname)s] [%(asctime)s] %(msg)s', level=logging.INFO)
-
+logging.info('proxy: %s', proxy if proxy else 'none')
 
 def quote(s: str) -> str:
     return "".join([
