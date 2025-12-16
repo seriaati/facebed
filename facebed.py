@@ -808,6 +808,7 @@ def main():
         exit(1)
 
     logging.info(f'listening on {config['host']}:{config['port']}')
+    logging.info(f'using proxy: {"none" if not proxy else proxy}')
     app.install(log_to_logger)
     app.run(host=config['host'], port=config['port'], quiet=True)
 
