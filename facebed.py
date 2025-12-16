@@ -789,6 +789,8 @@ def main():
 
         with open(args.config, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
+        logging.info(f'loaded config from {args.config}')
+        logging.info(f'config contents: {config}')
         for dk in default_config:
             if dk not in config:
                 config[dk] = default_config[dk]
