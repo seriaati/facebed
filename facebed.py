@@ -391,9 +391,11 @@ class JsonParser:
         http_response = requests.get(JsonParser.ensure_full_url(post_path),
                                      headers=JsonParser.get_headers(), cookies=acc.get_cookies(),
                                      proxies={'http': config['proxy'], 'https': config['proxy']} if config['proxy'] else None)
+        logging.info(f'status code: {http_response.status_code} for {post_path}')
         html_parser = BeautifulSoup(http_response.text, 'html.parser')
 
         post_json = JsonParser.get_root_node(JsonParser.get_post_json(html_parser))
+        logging.info(f'post json keys: {list(post_json.keys())} for {post_path}')
         likes, cmts, shares = JsonParser.get_interaction_counts(post_json)
         # noinspection PyTypeChecker
         post_date = int(Jq.first(post_json['context_layout']['story']['comet_sections']['metadata'], 'creation_time'))
