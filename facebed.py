@@ -388,6 +388,7 @@ class JsonParser:
 
     @staticmethod
     def process_post(post_path: str) -> ParsedPost:
+        logging.info(f'using proxy: {config["proxy"]}' if config['proxy'] else 'no proxy used')
         http_response = requests.get(JsonParser.ensure_full_url(post_path),
                                      headers=JsonParser.get_headers(), cookies=acc.get_cookies(),
                                      proxies={'http': config['proxy'], 'https': config['proxy']} if config['proxy'] else None)
