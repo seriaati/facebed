@@ -35,7 +35,6 @@ proxy: ''
 
 config: dict = {}
 default_config: dict = yaml.safe_load(io.StringIO(CONFIG_STR))
-proxy = config.get('proxy')
 app: Bottle = Bottle()
 
 WWWFB = 'https://www.facebook.com'
@@ -391,7 +390,7 @@ class JsonParser:
     def process_post(post_path: str) -> ParsedPost:
         http_response = requests.get(JsonParser.ensure_full_url(post_path),
                                      headers=JsonParser.get_headers(), cookies=acc.get_cookies(),
-                                     proxies={'http': proxy, 'https': proxy} if proxy else None)
+                                     proxies={'http': config['proxy'], 'https': config['proxy']} if config['proxy'] else None)
         html_parser = BeautifulSoup(http_response.text, 'html.parser')
 
         post_json = JsonParser.get_root_node(JsonParser.get_post_json(html_parser))
@@ -442,7 +441,7 @@ class SinglePhotoParser:
     def process_post(post_path: str):
         http_response = requests.get(JsonParser.ensure_full_url(post_path),
                                      headers=JsonParser.get_headers(), cookies=acc.get_cookies(),
-                                     proxies={'http': proxy, 'https': proxy} if proxy else None)
+                                     proxies={'http': config['proxy'], 'https': config['proxy']} if config['proxy'] else None)
         html_parser = BeautifulSoup(http_response.text, 'html.parser')
         content_node = SinglePhotoParser.get_content_node(html_parser)
         interaction_node = SinglePhotoParser.get_interactions_node(html_parser)
@@ -522,7 +521,7 @@ class ReelsParser:
     def process_post(post_path: str) -> ParsedPost:
         http_response = requests.get(JsonParser.ensure_full_url(post_path),
                                      headers=JsonParser.get_headers(),
-                                     proxies={'http': proxy, 'https': proxy} if proxy else None)
+                                     proxies={'http': config['proxy'], 'https': config['proxy']} if config['proxy'] else None)
         html_parser = BeautifulSoup(http_response.text, 'html.parser')
         content_node = ReelsParser.get_content_node(html_parser)
 
@@ -573,7 +572,7 @@ class VideoWatchParser:
     def process_post(post_path: str) -> ParsedPost:
         http_response = requests.get(JsonParser.ensure_full_url(post_path),
                                      headers=JsonParser.get_headers(), cookies=acc.get_cookies(),
-                                     proxies={'http': proxy, 'https': proxy} if proxy else None)
+                                     proxies={'http': config['proxy'], 'https': config['proxy']} if config['proxy'] else None)
         html_parser = BeautifulSoup(http_response.text, 'html.parser')
         content_node = VideoWatchParser.get_content_node(html_parser)
 
@@ -810,7 +809,6 @@ def main():
         exit(1)
 
     logging.info(f'listening on {config['host']}:{config['port']}')
-    logging.info(f'using proxy: {"none" if not proxy else proxy}')
     app.install(log_to_logger)
     app.run(host=config['host'], port=config['port'], quiet=True)
 
