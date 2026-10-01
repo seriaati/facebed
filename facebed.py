@@ -8,14 +8,15 @@ import sys
 import threading
 import time
 import traceback
-from dataclasses import dataclass
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
 from contextlib import contextmanager
 from functools import wraps
 from html import escape
 from typing import Self, Callable
 from urllib.parse import quote as _quote_
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 import crawleruseragents
 import requests as rq
@@ -25,6 +26,8 @@ from bottle import Bottle, request, response, static_file
 from bs4 import BeautifulSoup
 from discord_webhook import DiscordWebhook, DiscordEmbed
 from yattag import indent
+
+import component_embed
 
 CONFIG_STR = '''
 host: 0.0.0.0
@@ -328,12 +331,146 @@ class ParsedPost:
     shares: str
     video_links: list[str]
 
+    # optional extras for the Discord component embed
+    key: str = ''  # short id used by the /m/<key>/<slot> media redirects
+    author: str = ''
+    author_url: str = ''
+    avatar: str = ''
+    verified: bool = False
+    own_text: str | None = None  # caption without the shared post appended
+    media: list[tuple[str, str]] = field(default_factory=list)  # ordered ('image'|'video', url)
+    counts: tuple[int | None, int | None, int | None] = (None, None, None)  # exact likes, comments, shares
+    group_name: str = ''
+    group_url: str = ''
+    shared: dict | str | None = None  # shared post fields, or 'unavailable'
+
 
 def banned(url: str) -> ParsedPost:
     Utils.warn(f'banned embed attempted "{url}"')
     return ParsedPost('Banned', 'This user is banned by the operators of this embed server',
                       [], 'https://banned.facebook.com', -1,
                       'null', 'null', 'null', [])
+
+
+class EmbedExtract:
+    """Extra post fields for the component embed, read beside the existing parsing."""
+    VERIFIED = 'CometFeedUserVerifiedBadgeStrategy'
+
+    @staticmethod
+    def image_uri(media: dict) -> str:
+        for k in ('viewer_image', 'photo_image', 'image'):
+            if isinstance(media.get(k), dict) and media[k].get('uri'):
+                return media[k]['uri']
+        return ''
+
+    @staticmethod
+    def media(story: dict) -> list[tuple[str, str]]:
+        out = []
+        for a in story.get('attachments') or []:
+            at = ((a or {}).get('styles') or {}).get('attachment') or {}
+            nodes = [(n or {}).get('media') or {} for n in (at.get('all_subattachments') or {}).get('nodes') or []]
+            for m in nodes or [at.get('media') or {}]:
+                if m.get('__typename') == 'Video':
+                    try:
+                        out.append(('video', ReelsParser.get_video_link(None, user_node=m)))
+                    except FacebedException:
+                        pass
+                elif m.get('__typename') == 'Photo' and EmbedExtract.image_uri(m):
+                    out.append(('image', EmbedExtract.image_uri(m)))
+        return out
+
+    @staticmethod
+    def badge(title_section) -> bool:
+        if not isinstance(title_section, dict):
+            return False
+        sections = (title_section.get('story') or {}).get('comet_sections') or {}
+        return (sections.get('badge') or {}).get('__typename') == EmbedExtract.VERIFIED
+
+    @staticmethod
+    def raw_counts(node: dict) -> tuple[int | None, int | None, int | None]:
+        renderer = Jq.first(node, 'comet_ufi_summary_and_actions_renderer')
+        fb = renderer.get('feedback') if isinstance(renderer, dict) else None
+        if not isinstance(fb, dict):
+            return None, None, None
+        likes = (fb.get('reaction_count') or {}).get('count')
+        shares = (fb.get('share_count') or {}).get('count')
+        cmts = Jq.first(fb, 'total_count')
+        return likes, cmts if isinstance(cmts, int) else None, shares
+
+    @staticmethod
+    def creation_time(node) -> int:
+        t = Jq.first(node, 'creation_time')
+        return int(t) if isinstance(t, (int, str)) and str(t).isdigit() else -1
+
+    @staticmethod
+    def fill_post(post: ParsedPost, root: dict, story: dict):
+        actor = (story.get('actors') or [{}])[0] or {}
+        title = (((root.get('context_layout') or {}).get('story') or {}).get('comet_sections') or {}).get('title') or {}
+        to = (title.get('story') or {}).get('to') or {}
+        post.key = str(story.get('post_id') or '')
+        post.author = actor.get('name') or ''
+        post.author_url = actor.get('url') or actor.get('profile_url') or ''
+        post.avatar = (actor.get('profile_picture') or {}).get('uri') or ''
+        post.verified = EmbedExtract.badge(title)
+        post.own_text = (story.get('message') or {}).get('text') or ''
+        post.media = EmbedExtract.media(story)
+        post.counts = EmbedExtract.raw_counts(root)
+        if to.get('__typename') == 'Group':
+            post.group_name, post.group_url = to.get('name') or '', to.get('url') or ''
+
+        shared = story.get('attached_story')
+        if isinstance(shared, dict) and shared.get('actors'):
+            shared_actor = shared['actors'][0] or {}
+            layout = Jq.first(story.get('comet_sections') or {}, 'attached_story_layout')
+            layout = ((layout or {}).get('story') or {}).get('comet_sections') or {} if isinstance(layout, dict) else {}
+            post.shared = {
+                'author': shared_actor.get('name') or '',
+                'avatar': (shared_actor.get('profile_picture') or {}).get('uri') or '',
+                'verified': EmbedExtract.badge(layout.get('title')),
+                'text': (shared.get('message') or {}).get('text') or '',
+                'url': shared.get('wwwURL') or '',
+                'date': EmbedExtract.creation_time(layout.get('metadata') or {}),
+                'media': EmbedExtract.media(shared),
+            }
+        elif isinstance(shared, dict):
+            post.shared = 'unavailable'
+
+
+class MediaStore:
+    """slot -> real media URL for the short /m/<key>/<slot> redirects in component embeds."""
+    MAX_POSTS = 1000
+    _slots: OrderedDict = OrderedDict()
+
+    @staticmethod
+    def register(post: ParsedPost):
+        if not post.key:
+            return
+        slots = {'a': post.avatar}
+        slots.update({str(i): url for i, (_, url) in enumerate(post.media[:10])})
+        if isinstance(post.shared, dict):
+            slots['qa'] = post.shared['avatar']
+            slots.update({f'q{i}': url for i, (_, url) in enumerate(post.shared['media'][:10])})
+        MediaStore._slots[post.key] = {k: v for k, v in slots.items() if v}
+        MediaStore._slots.move_to_end(post.key)
+        while len(MediaStore._slots) > MediaStore.MAX_POSTS:
+            MediaStore._slots.popitem(last=False)
+
+    @staticmethod
+    def refetch(key: str) -> ParsedPost:
+        if key.isdigit():
+            return JsonParser.process_post(key)
+        ident = key[1:]
+        if key[0] == 'r':
+            return ReelsParser.process_post(f'reel/{ident}')
+        if key[0] == 'w':
+            return VideoWatchParser.process_post(f'watch/?v={ident}')
+        return SinglePhotoParser.process_post(f'photo/?fbid={ident}')
+
+    @staticmethod
+    def resolve(key: str, slot: str) -> str:
+        if key not in MediaStore._slots:
+            MediaStore.register(MediaStore.refetch(key))
+        return MediaStore._slots.get(key, {}).get(slot, '')
 
 
 class FacebedException(Exception):
@@ -611,8 +748,13 @@ class JsonParser:
                 return banned(post_url)
 
             # TODO: support normal /watch here
-            return ParsedPost(link_header, post_content.strip(), story.image_links, post_url, post_date,
-                              likes, cmts, shares, story.video_links)
+            parsed = ParsedPost(link_header, post_content.strip(), story.image_links, post_url, post_date,
+                                likes, cmts, shares, story.video_links)
+            try:
+                EmbedExtract.fill_post(parsed, post_json, story_dict)
+            except Exception:
+                logging.warning(f'component embed extraction failed for {post_path}:\n{traceback.format_exc()}')
+            return parsed
 
 
 class SinglePhotoParser:
@@ -649,8 +791,18 @@ class SinglePhotoParser:
             likes, cmts, shares = JsonParser.get_interaction_counts(interaction_node)
             image_url = SinglePhotoParser.get_single_image(html_parser)
 
-            return ParsedPost(post_author, post_text.strip(), [image_url], JsonParser.ensure_full_url(post_path),
-                              post_date, likes, cmts, shares, [])
+            parsed = ParsedPost(post_author, post_text.strip(), [image_url], JsonParser.ensure_full_url(post_path),
+                                post_date, likes, cmts, shares, [])
+            try:
+                fbid = parse_qs(urlparse(post_path).query).get('fbid', [''])[0]
+                parsed.key = f'f{fbid}' if fbid.isdigit() else ''
+                parsed.author = post_author
+                parsed.avatar = (content_node['owner'].get('profile_picture') or {}).get('uri') or ''
+                parsed.media = [('image', image_url)]
+                parsed.counts = EmbedExtract.raw_counts(interaction_node)
+            except Exception:
+                logging.warning(f'component embed extraction failed for {post_path}:\n{traceback.format_exc()}')
+            return parsed
 
 
 class PhotocomParser:
@@ -731,6 +883,11 @@ class ReelsParser:
 
     @staticmethod
     def get_reaction_counts(html_parser: BeautifulSoup, is_ig: bool, video_id: str) -> tuple[str, str, str]:
+        likes, cmts, shares = ReelsParser.get_raw_reaction_counts(html_parser, is_ig, video_id)
+        return Utils.human_format(likes), Utils.human_format(cmts), Utils.human_format(shares)
+
+    @staticmethod
+    def get_raw_reaction_counts(html_parser: BeautifulSoup, is_ig: bool, video_id: str) -> tuple:
         blocks: list[dict] = []
         for bloc in JsonParser.get_json_blocks(html_parser, sort=False):
             if Jq.has(bloc, 'unified_reactors'):
@@ -753,7 +910,7 @@ class ReelsParser:
         cmts = ig_cmts if is_ig else last_fb['total_comment_count']
         shares = last_fb['share_count_reduced'] # TODO: investigate why it's "reduced"
 
-        return Utils.human_format(likes), Utils.human_format(cmts), Utils.human_format(shares)
+        return likes, cmts, shares
 
 
     @staticmethod
@@ -789,12 +946,26 @@ class ReelsParser:
 
             post_text = '' if content_node.get('message') is None else content_node['message']['text']
 
-            likes, cmts, shares = ReelsParser.get_reaction_counts(html_parser, is_ig, video_id)
+            raw_counts = ReelsParser.get_raw_reaction_counts(html_parser, is_ig, video_id)
+            likes, cmts, shares = (Utils.human_format(x) for x in raw_counts)
 
             if owner_info['id'] in config['banned_users']:
                 return banned(post_url)
 
-            return ParsedPost(op_name, post_text, [], post_url, post_date, likes, cmts, shares, [video_link])
+            parsed = ParsedPost(op_name, post_text, [], post_url, post_date, likes, cmts, shares, [video_link])
+            try:
+                reel_id = str((content_node.get('video') or {}).get('id') or video_id)
+                parsed.key = f'r{reel_id}' if reel_id.isdigit() else ''
+                parsed.author = owner_info.get('username' if is_ig else 'name') or ''
+                parsed.author_url = owner_info.get('url') or ''
+                parsed.avatar = (owner_info.get('displayPicture') or {}).get('uri') or ''
+                parsed.verified = bool(owner_info.get('is_verified'))
+                parsed.media = [('video', video_link)]
+                r_likes, r_cmts, r_shares = (int(x) if str(x).isdigit() else None for x in raw_counts)
+                parsed.counts = (r_likes, r_cmts, r_shares)
+            except Exception:
+                logging.warning(f'component embed extraction failed for {post_path}:\n{traceback.format_exc()}')
+            return parsed
 
 
 class VideoWatchParser:
@@ -848,7 +1019,17 @@ class VideoWatchParser:
             cmts = Utils.human_format(content_node['feedback']['total_comment_count'])
             post_date = VideoWatchParser.get_date(html_parser)
 
-            return ParsedPost(op_name, post_text, [], post_url, post_date, likes, cmts, shares, [video_link])
+            parsed = ParsedPost(op_name, post_text, [], post_url, post_date, likes, cmts, shares, [video_link])
+            try:
+                v = parse_qs(urlparse(post_path).query).get('v', [''])[0]
+                parsed.key = f'w{v}' if v.isdigit() else ''
+                parsed.author = op_name
+                parsed.media = [('video', video_link)]
+                parsed.counts = (content_node['feedback']['reaction_count']['count'],
+                                 content_node['feedback']['total_comment_count'], None)
+            except Exception:
+                logging.warning(f'component embed extraction failed for {post_path}:\n{traceback.format_exc()}')
+            return parsed
 
 
 def format_error_message_embed(original_url: str) -> str:
@@ -879,6 +1060,21 @@ def is_facebook_url(url: str) -> bool:
     return is_permalink or is_post or is_story or is_photo or is_group_post
 
 
+def with_component_embed(html: str, post: ParsedPost) -> str:
+    """Add the Discord component embed next to the OG tags; the OG tags stay as the fallback."""
+    try:
+        origin = '{}://{}'.format(*request.urlparts[:2])
+        payload = component_embed.render(post, origin)
+    except Exception:
+        logging.warning(f'component embed failed for {post.url}:\n{traceback.format_exc()}')
+        return html
+    if not payload:
+        return html
+    MediaStore.register(post)
+    tag = f'<script id="discord:component-embed" type="application/json">{payload}</script>'
+    return html.replace('</head>', f'    {tag}\n    </head>', 1)
+
+
 def format_reel_post_embed(post: ParsedPost) -> str:
     def get_video_meta_tag(link: str) -> str:
         return '\n'.join([
@@ -892,7 +1088,7 @@ def format_reel_post_embed(post: ParsedPost) -> str:
     post_date = Utils.timestamp_to_str(post.date)
     color = '#0866ff'
 
-    return Utils.prettify(f'''<!DOCTYPE html>
+    return with_component_embed(Utils.prettify(f'''<!DOCTYPE html>
         <html lang="">
         <head>
             <title>{get_credit()}</title>
@@ -911,7 +1107,7 @@ def format_reel_post_embed(post: ParsedPost) -> str:
             <meta name="twitter:card" content="player"/>
             <meta name="theme-color" content="{color}"/>
         </head>
-        </html>''')
+        </html>'''), post)
 
 
 def format_full_post_embed(post: ParsedPost) -> str:
@@ -925,7 +1121,7 @@ def format_full_post_embed(post: ParsedPost) -> str:
     reaction_str = Utils.format_reactions_str(post.likes, post.comments, post.shares)
 
     # TODO: organize and duplicate the neccessary tags
-    return Utils.prettify(f'''<!DOCTYPE html>
+    return with_component_embed(Utils.prettify(f'''<!DOCTYPE html>
         <html lang="">
         <head>
             <title>{get_credit()}</title>
@@ -940,7 +1136,7 @@ def format_full_post_embed(post: ParsedPost) -> str:
             <meta name="twitter:card" content="summary_large_image"/>
             <meta name="theme-color" content="#0866ff"/>
         </head>
-        </html>''')
+        </html>'''), post)
 
 
 def format_redirect_page(url: str) -> str:
@@ -972,6 +1168,22 @@ def process_single_photo(post_path: str) -> str:
     if type(parsed_post) == ParsedPost:
         return format_full_post_embed(parsed_post)
     return format_error_message_embed(f'{WWWFB}/{post_path}')
+
+
+@app.route('/m/<key:re:[rwf]?[0-9]{1,25}>/<slot:re:(a|qa|q?[0-9])>.<ext:re:(jpg|mp4)>')
+def media_redirect(key: str, slot: str, ext: str):
+    """Short media URLs for component embeds; the real (signed, ~1 KB) CDN URL would blow the byte cap."""
+    try:
+        url = MediaStore.resolve(key, slot)
+    except Exception:
+        logging.warning(f'media refetch failed for /m/{key}/{slot}.{ext}:\n{traceback.format_exc()}')
+        url = ''
+    if not url:
+        response.status = 404
+        return ''
+    response.status = 302
+    response.headers['Location'] = url
+    return ''
 
 
 @app.route('/<path:path>')
