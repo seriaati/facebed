@@ -44,6 +44,7 @@ default_config: dict = yaml.safe_load(io.StringIO(CONFIG_STR))
 app: Bottle = Bottle()
 
 WWWFB = 'https://www.facebook.com'
+DISCORD_VIDEO_MAX_BYTES = 35_000_000  # larger hd videos fall back to sd
 TZ_OFFSET: int = 0
 ALLOW_UPDATE = True
 logging.basicConfig(format='[%(levelname)s] [%(asctime)s] %(msg)s', level=logging.INFO)
@@ -863,17 +864,23 @@ class PhotocomParser:
 
 class ReelsParser:
     @staticmethod
+    def too_big_for_discord(link: str) -> bool:
+        # discord downloads the whole video and drops the embed if that takes ~10s
+        try:
+            size = int(rq.head(link, timeout=5).headers.get('content-length', 0))
+        except (rq.RequestException, ValueError):
+            return False
+        return size > DISCORD_VIDEO_MAX_BYTES
+
+    @staticmethod
     def get_video_link(html_parser: BeautifulSoup|None, user_node: dict = None) -> str:
         def work_node(node: dict) -> str:
             video_node = Jq.first(node, 'videoDeliveryLegacyFields')
-            for key in ['browser_native_hd_url', 'browser_native_sd_url']:
-                try:
-                    video_link = Jq.first(video_node, key)
-                    if not video_link:
-                        continue
-                    return str(video_link)
-                except StopIteration:
-                    pass
+            hd_link, sd_link = (Jq.first(video_node, key) for key in ['browser_native_hd_url', 'browser_native_sd_url'])
+            if hd_link and sd_link and ReelsParser.too_big_for_discord(str(hd_link)):
+                return str(sd_link)
+            if hd_link or sd_link:
+                return str(hd_link or sd_link)
             raise ParseException('Invalid reels link (vn)')
 
         if user_node:
