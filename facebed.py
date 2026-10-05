@@ -199,6 +199,9 @@ class Jq:
 
 
 class Cookies:
+    # facebook's login session; the rest are cosmetic and expire much sooner
+    SESSION_COOKIES = ('c_user', 'xs')
+
     def __init__(self, fn: str):
         self.cookies: list = []
 
@@ -209,18 +212,22 @@ class Cookies:
         with open(fn) as f:
             self.cookies = json.load(f)
             logging.info(f'loaded {len(self.cookies)} cookies from {fn}')
-        self.get_cookies()
 
     # noinspection PyMethodMayBeStatic
     def is_valid_cookie(self, entry: dict) -> bool:
         return int(entry.get('expirationDate', 2**31)) > time.time()
 
+    def expired(self) -> list[str]:
+        return [k['name'] for k in self.cookies if not self.is_valid_cookie(k)]
+
     def get_cookies(self) -> dict[str, str]:
-        if any([not self.is_valid_cookie(cookie) for cookie in self.cookies]):
+        expired = self.expired()
+        if any(name in self.SESSION_COOKIES for name in expired):
+            logging.warning(f'session cookies expired ({", ".join(expired)}), requests will be logged out')
             Utils.warn('@everyone cookies expired')
             return {}
 
-        return {k['name']: k['value'] for k in self.cookies}
+        return {k['name']: k['value'] for k in self.cookies if k['name'] not in expired}
 
 
 acc = Cookies('cookies.json')
@@ -1385,6 +1392,10 @@ def main():
     if sys.version_info.minor < 12:
         logging.error('python 3.12+ required, see https://docs.python.org/3.12/whatsnew/3.12.html#pep-701-syntactic-formalization-of-f-strings')
         exit(1)
+
+    # checked here rather than on load so Utils.warn sees the config
+    if acc.get_cookies() and acc.expired():
+        logging.info(f'ignoring expired non-session cookies: {", ".join(acc.expired())}')
 
     logging.info(f'listening on {config["host"]}:{config["port"]}')
     app.install(log_to_logger)
