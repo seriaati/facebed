@@ -36,6 +36,7 @@ timezone: 7
 banned_users: []
 notifier_webhook: ''
 proxy: ''
+user_agent: ''
 '''.strip()
 
 config: dict = {}
@@ -490,7 +491,7 @@ class ParseException(FacebedException):
 
 class JsonParser:
     @staticmethod
-    def get_headers() -> dict:
+    def get_headers(with_cookies=False) -> dict:
         headers = {
             'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/jxl,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'accept-language': 'en-US,en;q=0.9',
@@ -500,6 +501,9 @@ class JsonParser:
             'sec-fetch-mode': 'navigate',
             'sec-fetch-site': 'none',
         }
+        # cookies are tied to the browser that issued them, so match its UA
+        if with_cookies and config['user_agent']:
+            headers['user-agent'] = config['user_agent']
 
         return headers
 
@@ -543,19 +547,26 @@ class JsonParser:
             raise NoDataException(f'Facebook served a login wall or empty page for {post_path} - content requires authentication')
 
     @staticmethod
+    def get_page(url: str, cookies: dict = None) -> tuple[BeautifulSoup, str]:
+        kw = {'headers': JsonParser.get_headers(with_cookies=bool(cookies))}
+        if cookies:
+            kw['cookies'] = cookies
+        if config['proxy']:
+            kw['proxies'] = {'http': config['proxy'], 'https': config['proxy']}
+        raw_html = requests.get(url, **kw).text
+        return BeautifulSoup(raw_html, 'html.parser'), raw_html
+
+    @staticmethod
     @contextmanager
     def fetch_page(post_path: str, use_cookies=True):
         url = JsonParser.ensure_full_url(post_path)
-        kw = {'headers': JsonParser.get_headers()}
-        if use_cookies:
+        # try logged out first so the account is only used when actually needed
+        html_parser, raw_html = JsonParser.get_page(url)
+        if use_cookies and JsonParser.probe_page_type(html_parser) != 'has_data':
             cookies = acc.get_cookies()
             if cookies:
-                kw['cookies'] = cookies
-        if config['proxy']:
-            kw['proxies'] = {'http': config['proxy'], 'https': config['proxy']}
-        http_response = requests.get(url, **kw)
-        raw_html = http_response.text
-        html_parser = BeautifulSoup(raw_html, 'html.parser')
+                logging.info(f'no data logged out for {post_path}, retrying with cookies')
+                html_parser, raw_html = JsonParser.get_page(url, cookies)
         JsonParser.check_page_or_raise(html_parser, post_path)
         try:
             yield html_parser
@@ -1200,9 +1211,10 @@ def index(path: str):
             dump_path = ''
         try:
             url = JsonParser.ensure_full_url(dump_path)
-            kw = {'headers': JsonParser.get_headers()}
-            if acc.get_cookies():
-                kw['cookies'] = acc.get_cookies()
+            cookies = acc.get_cookies()
+            kw = {'headers': JsonParser.get_headers(with_cookies=bool(cookies))}
+            if cookies:
+                kw['cookies'] = cookies
             http_response = requests.get(url, **kw)
             raw_html = http_response.text
 
