@@ -1,0 +1,10 @@
+.git
+.venv*
+.idea
+.tokensave/
+__pycache__
+*.pyc
+config.yaml
+fulltest/
+urls.txt
+*_dump.html

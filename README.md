@@ -6,6 +6,12 @@ A Facebook embed provider for Discord and other messaging apps.
 
 ## For users:
 Replace `www.facebook.com` in your Facebook URL to `facebed.com`.
+
+Public post and group comment permalinks are supported: copy the comment's
+timestamp link, keeping `comment_id` and (for a reply) `reply_comment_id` in the
+URL. The embed shows the comment author, body, available attachment, timestamp,
+reactions and reply count. Facebook must expose the comment to logged-out
+requests; unavailable comments use the existing Facebook fallback card.
 <details>
 <summary>Vencord settings</summary>
 
@@ -25,16 +31,6 @@ Using regex:
 system installation (not recommended)
 4. Copy `user_config.example.py` to `user_config.py` and edit the self-explanatory options
 5. Start the `start.py` script
-
-## Remote updating
-This feature allows remote update triggers (git pull-ing and running a restart command)
-for instance maintainers. The `/update` endpoint is protected with HTTP username and password,
-which are set in the file `user_config.py`.
-
-## Cookies (DO NOT USE)
-Use the cookies exported using the extension Cookie Editor with the json format. Will warn 
-maintainers if any cookies expired.
-**DO NOT USE RIGHT NOW, WILL CAUSE A CHECKPOINT ON YOUR ACCOUNT**
 
 ## Start command and virtual environment
 I recommend running `facebed` in a virtual environment if you don't want to pollute your

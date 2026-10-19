@@ -163,8 +163,7 @@ debug.*
 # macOS bullshit
 .DS_Store
 
-cookies.txt
-cookies.json
+.tokensave/
 samples
 jk
 test*
@@ -175,3 +174,8 @@ config.yaml
 *.html
 graph/
 *.txt
+fulltest/
+TOBEFIXED/
+.discord-secret
+*.jq
+research/
