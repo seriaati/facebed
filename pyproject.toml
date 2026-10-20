@@ -1,0 +1,16 @@
+[project]
+name = "facebed"
+version = "0.1.0"
+description = "A Facebook embed provider for Discord and other messaging apps"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4==4.13.5",
+    "bottle==0.13.4",
+    "crawler-user-agents==1.59.0",
+    "curl-cffi==0.15.0",
+    "discord-webhook==1.4.1",
+    "pyyaml==6.0.3",
+    "yattag==1.16.1",
+]
+
