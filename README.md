@@ -45,7 +45,7 @@ threads: 8                  # requests served concurrently
 timezone: 7                 # UTC offset in hours (5.5 works), or an IANA name like Asia/Bangkok to follow DST
 banned_users: []            # Facebook user/page ids whose posts are not embedded
 notifier_webhook: ''        # Discord webhook for login walls, dumps and cookie expiry
-proxy: ''                   # e.g. http://user:pass@host:port
+proxy: ''                   # logged-out requests only, e.g. http://user:pass@host:port
 user_agent: ''              # browser UA that issued cookies.json, sent with logged-in requests
 cookies_file: cookies.json  # exported browser cookies for posts that need a login
 log_level: INFO

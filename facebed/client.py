@@ -156,6 +156,8 @@ class CFFI:
                     request_kwargs['max_redirects'] = 0
                     if cookies and is_facebook_url(current_url, require_https=True):
                         request_kwargs['cookies'] = cookies
+                        # logged in hops skip the proxy so the account always sees the server's own IP
+                        request_kwargs['proxies'] = {}
 
                     sess.cookies.clear()
                     try:
