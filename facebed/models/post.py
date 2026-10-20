@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from facebed.utils import Utils
+from facebed.notifier import warn
 
 
 @dataclass
@@ -32,7 +32,7 @@ class ParsedPost:
 
 
 def banned(url: str) -> ParsedPost:
-    Utils.warn(f'banned embed attempted "{url}"')
+    warn(f'banned embed attempted "{url}"')
     return ParsedPost('Banned', 'This user is banned by the operators of this embed server',
                       [], 'https://banned.facebook.com', -1,
                       'null', 'null', 'null', [])

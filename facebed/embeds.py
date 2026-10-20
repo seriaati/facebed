@@ -5,14 +5,19 @@ from html import escape
 
 from bottle import request
 
-from facebed import component_embed
-from facebed.media_store import MediaStore
+from facebed import component_embed, media_store
+from facebed.formatting import (
+    format_reactions_str,
+    get_credit,
+    prettify,
+    quote,
+    timestamp_to_str,
+)
 from facebed.models.post import ParsedPost
-from facebed.utils import Utils, get_credit, quote
 
 
 def format_error_message_embed(original_url: str) -> str:
-    return Utils.prettify(f'''<!DOCTYPE html>
+    return prettify(f'''<!DOCTYPE html>
 <html lang="">
 <head>
 <meta charset="UTF-8" />
@@ -34,7 +39,7 @@ def with_component_embed(html: str, post: ParsedPost) -> str:
         return html
     if not payload:
         return html
-    MediaStore.register(post)
+    media_store.register(post)
     tag = f'<script id="discord:component-embed" type="application/json">{payload}</script>'
     return html.replace('</head>', f'    {tag}\n    </head>', 1)
 
@@ -49,14 +54,14 @@ def format_reel_post_embed(post: ParsedPost) -> str:
         ])
 
     video_meta_tags = '\n'.join([get_video_meta_tag(vu) for vu in post.video_links])
-    reaction_str = Utils.format_reactions_str(
+    reaction_str = format_reactions_str(
         post.likes, post.comments, post.shares, post.top_reaction_ids
     )
-    post_date = Utils.timestamp_to_str(post.date)
+    post_date = timestamp_to_str(post.date)
     site_name = escape(f'{get_credit()}\n{post_date}\n{reaction_str}', quote=True)
     color = '#0866ff'
 
-    return with_component_embed(Utils.prettify(f'''<!DOCTYPE html>
+    return with_component_embed(prettify(f'''<!DOCTYPE html>
         <html lang="">
         <head>
             <title>{get_credit()}</title>
@@ -88,8 +93,8 @@ def format_full_post_embed(post: ParsedPost) -> str:
         f'<meta property="og:image" content="{escape(iu, quote=True)}"/>'
         for iu in image_links
     ])
-    post_date = Utils.timestamp_to_str(post.date)
-    reaction_str = Utils.format_reactions_str(
+    post_date = timestamp_to_str(post.date)
+    reaction_str = format_reactions_str(
         post.likes, post.comments, post.shares, post.top_reaction_ids
     )
     site_name = escape(
@@ -97,7 +102,7 @@ def format_full_post_embed(post: ParsedPost) -> str:
     )
 
     # TODO: organize and duplicate the neccessary tags
-    return with_component_embed(Utils.prettify(f'''<!DOCTYPE html>
+    return with_component_embed(prettify(f'''<!DOCTYPE html>
         <html lang="">
         <head>
             <title>{get_credit()}</title>
@@ -117,7 +122,7 @@ def format_full_post_embed(post: ParsedPost) -> str:
 
 def format_redirect_page(url: str) -> str:
     script_url = json.dumps(url).replace('<', '\\u003c').replace('>', '\\u003e').replace('&', '\\u0026')
-    return Utils.prettify(f'''<!DOCTYPE HTML>
+    return prettify(f'''<!DOCTYPE HTML>
 <html lang="en-US">
     <head>
         <meta charset="UTF-8">

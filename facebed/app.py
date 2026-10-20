@@ -7,16 +7,19 @@ from functools import wraps
 import crawleruseragents
 from bottle import Bottle, request, response, static_file
 
+from facebed import media_store
 from facebed.constants import ASSETS_DIR, WWWFB
 from facebed.embeds import format_error_message_embed, format_redirect_page
 from facebed.errors import NoDataException
-from facebed.log import _readable_log_title
-from facebed.media_store import MediaStore
+from facebed.formatting import get_credit
+from facebed.log import readable_log_title
 from facebed.metrics import service_metrics
-from facebed.notifier import _send_dump_report, _send_restricted_page_report, failed_post_type
-from facebed.pipeline import _record_scrape_error, _run_tracked_request
-from facebed.utils import get_credit
-
+from facebed.notifier import (
+    failed_post_type,
+    send_dump_report,
+    send_restricted_page_report,
+)
+from facebed.pipeline import record_scrape_error, run_tracked_request
 
 app: Bottle = Bottle()
 
@@ -25,7 +28,7 @@ app: Bottle = Bottle()
 def media_redirect(key: str, slot: str, ext: str):
     """Short media URLs for component embeds; the real (signed, ~1 KB) CDN URL would blow the byte cap."""
     try:
-        url = MediaStore.resolve(key, slot)
+        url = media_store.resolve(key, slot)
     except Exception:
         logging.warning(f'media refetch failed for /m/{key}/{slot}.{ext}:\n{traceback.format_exc()}')
         url = ''
@@ -72,11 +75,11 @@ def index(path: str):
 
     selected_response = None
     try:
-        result, selected_response, parser_entered = _run_tracked_request(path)
+        result, selected_response, parser_entered = run_tracked_request(path)
         if not parser_entered:
             service_metrics.record_request()
     except Exception as exc:
-        _record_scrape_error(exc)
+        record_scrape_error(exc)
         selected_response = getattr(exc, 'selected_response', None)
         if selected_response is None:
             selected_response = getattr(exc, 'upstream_response', None)
@@ -89,11 +92,11 @@ def index(path: str):
             ' '.join(str(exc).split()),
         )
         if isinstance(exc, NoDataException):
-            _send_restricted_page_report(original_path, exc, selected_response)
+            send_restricted_page_report(original_path, exc, selected_response)
         result = format_error_message_embed(f'{WWWFB}/{original_path}')
 
     if dump_requested:
-        _send_dump_report(path, selected_response)
+        send_dump_report(path, selected_response)
         response.headers['Cache-Control'] = 'no-store'
     return result
 
@@ -120,7 +123,7 @@ def log_to_logger(fn):
     @wraps(fn)
     def _log_to_logger(*argsz, **kwargs):
         actual_response = fn(*argsz, **kwargs)
-        title = _readable_log_title(request.environ.get('facebed.post_title', ''))
+        title = readable_log_title(request.environ.get('facebed.post_title', ''))
         logging.info(
             '%s %s %s %s%s', request.remote_addr, request.method,
             request.url, response.status, f' {title}' if title else '',

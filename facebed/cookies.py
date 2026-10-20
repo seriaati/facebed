@@ -3,7 +3,7 @@ import logging
 import os
 import time
 
-from facebed.utils import Utils
+from facebed.notifier import warn
 
 
 class Cookies:
@@ -32,7 +32,7 @@ class Cookies:
         expired = self.expired()
         if any(name in self.SESSION_COOKIES for name in expired):
             logging.warning(f'session cookies expired ({", ".join(expired)}), requests will be logged out')
-            Utils.warn('@everyone cookies expired')
+            warn('@everyone cookies expired')
             return {}
 
         return {k['name']: k['value'] for k in self.cookies if k['name'] not in expired}

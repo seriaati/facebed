@@ -23,7 +23,7 @@ def main():
         logging.error('python 3.12+ required, see https://docs.python.org/3.12/whatsnew/3.12.html#pep-701-syntactic-formalization-of-f-strings')
         exit(1)
 
-    # checked here rather than on load so Utils.warn sees the config
+    # checked here rather than on load so warn sees the config
     if acc.get_cookies() and acc.expired():
         logging.info(f'ignoring expired non-session cookies: {", ".join(acc.expired())}')
 

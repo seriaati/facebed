@@ -40,7 +40,7 @@ _console_handler.setFormatter(ConsoleFormatter(
 logging.basicConfig(level=logging.INFO, handlers=[_console_handler])
 
 
-def _readable_log_title(title: str) -> str:
+def readable_log_title(title: str) -> str:
     def decode_unicode(match):
         value = match[0]
         try:

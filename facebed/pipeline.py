@@ -19,18 +19,15 @@ from facebed.errors import (
 )
 from facebed.metrics import service_metrics
 from facebed.models.post import ParsedPost
-from facebed.parsers.comment import CommentParser
-from facebed.parsers.json_parser import JsonParser
-from facebed.parsers.photo import SinglePhotoParser
-from facebed.parsers.photocom import PhotocomParser
-from facebed.parsers.reels import ReelsParser
-from facebed.parsers.video_watch import VideoWatchParser
-from facebed.utils import Utils
+from facebed.parsers import comment, generic, photo, photocom, reels, video_watch
+from facebed.parsers.identity import get_terminal_video_id
+from facebed.share import resolve_share_link
+from facebed.urls import is_share_path, normalize_facebook_path
 
 
-def is_facebook_url(url: str) -> bool:
+def _is_facebook_post_url(url: str) -> bool:
     if urlparse(url).netloc:
-        url = Utils.normalize_facebook_path(url)
+        url = normalize_facebook_path(url)
     wwwfb = f'{WWWFB}/'
     username_pattern = '[a-zA-Z0-9-._]*'  # also covers /watch
     full_url = f'{wwwfb}{url}'
@@ -106,14 +103,14 @@ def _parse_with_generic(parser, post_path: str, http_response: CffiResponse | No
         if not _allow_route_upstream_fallback(first_error):
             raise
         try:
-            return _invoke_parser(JsonParser.process_post, post_path, http_response)
+            return _invoke_parser(generic.process_post, post_path, http_response)
         except PARSER_FALLBACK_EXCEPTIONS as second_error:
             raise _prefer_parser_error(first_error, second_error)
 
 
 def _parse_video_path(post_path: str, http_response: CffiResponse | None = None) -> ParsedPost:
     parsed = urlparse(post_path)
-    video_id = JsonParser.get_terminal_video_id(post_path)
+    video_id = get_terminal_video_id(post_path)
     if not video_id:
         search = re.search(
             r'(?:^|/)(?:[^/]+/)?v/(\d+)(?:/|$)',
@@ -122,7 +119,7 @@ def _parse_video_path(post_path: str, http_response: CffiResponse | None = None)
         )
         video_id = search.group(1) if search else None
     if not video_id:
-        return _invoke_parser(JsonParser.process_post, post_path, http_response)
+        return _invoke_parser(generic.process_post, post_path, http_response)
 
     path_parts = [part for part in parsed.path.split('/') if part]
     videos_index = next(
@@ -147,7 +144,7 @@ def _parse_video_path(post_path: str, http_response: CffiResponse | None = None)
     if slugged_video_path:
         try:
             generic_post = _invoke_parser(
-                JsonParser.process_post, post_path, original_response
+                generic.process_post, post_path, original_response
             )
             if generic_post.video_links:
                 return generic_post
@@ -161,18 +158,18 @@ def _parse_video_path(post_path: str, http_response: CffiResponse | None = None)
         reel_path += f'?{parsed.query}'
     reel_response = http_response
     if http_response is not None:
-        final_path = Utils.normalize_facebook_path(str(getattr(http_response, 'url', '')))
+        final_path = normalize_facebook_path(str(getattr(http_response, 'url', '')))
         if urlparse(final_path).path.rstrip('/') != urlparse(reel_path).path.rstrip('/'):
             reel_response = None
     try:
-        return _invoke_parser(ReelsParser.process_post, reel_path, reel_response)
+        return _invoke_parser(reels.process_post, reel_path, reel_response)
     except ROUTE_FALLBACK_EXCEPTIONS as reel_error:
         if not _allow_route_upstream_fallback(reel_error):
             raise
         if not slugged_video_path:
             try:
                 generic_post = _invoke_parser(
-                    JsonParser.process_post, post_path, original_response
+                    generic.process_post, post_path, original_response
                 )
                 if generic_post.video_links:
                     return generic_post
@@ -182,7 +179,7 @@ def _parse_video_path(post_path: str, http_response: CffiResponse | None = None)
                     raise
         try:
             return _invoke_parser(
-                VideoWatchParser.process_post, post_path, original_response
+                video_watch.process_post, post_path, original_response
             )
         except ROUTE_FALLBACK_EXCEPTIONS as watch_error:
             if generic_post is not None:
@@ -202,13 +199,13 @@ def _ensure_facebook_page_target(post_path: str) -> None:
 
 def _dispatch_post(post_path: str, http_response: CffiResponse | None = None) -> ParsedPost:
     _ensure_facebook_page_target(post_path)
-    if CommentParser.get_target(post_path) is not None:
+    if comment.get_target(post_path) is not None:
         _mark_parser_pipeline_entry()
-        return _invoke_parser(CommentParser.process_post, post_path, http_response)
+        return _invoke_parser(comment.process_post, post_path, http_response)
     parsed_path = urlparse(post_path).path
-    if Utils.is_share_path(post_path):
+    if is_share_path(post_path):
         _mark_parser_pipeline_entry()
-        return _invoke_parser(JsonParser.process_post, post_path, http_response)
+        return _invoke_parser(generic.process_post, post_path, http_response)
     if (
         re.search(r'(?:^|/)videos/', parsed_path, re.IGNORECASE)
         or re.search(r'(?:^|/)(?:[^/]+/)?v/\d+(?:/|$)', parsed_path, re.IGNORECASE)
@@ -217,16 +214,16 @@ def _dispatch_post(post_path: str, http_response: CffiResponse | None = None) ->
         return _parse_video_path(post_path, http_response)
     if re.match(r'^/?reel/[^/?]+', parsed_path, re.IGNORECASE):
         _mark_parser_pipeline_entry()
-        return _parse_with_generic(ReelsParser.process_post, post_path, http_response)
+        return _parse_with_generic(reels.process_post, post_path, http_response)
     if re.match(r'^/?photo(?:\.php)?/?$', parsed_path, re.IGNORECASE):
         _mark_parser_pipeline_entry()
-        return _parse_with_generic(SinglePhotoParser.process_post, post_path, http_response)
+        return _parse_with_generic(photo.process_post, post_path, http_response)
     if re.match(r'^/?watch(?:/|$)', parsed_path, re.IGNORECASE):
         _mark_parser_pipeline_entry()
-        return _parse_with_generic(VideoWatchParser.process_post, post_path, http_response)
-    if is_facebook_url(post_path):
+        return _parse_with_generic(video_watch.process_post, post_path, http_response)
+    if _is_facebook_post_url(post_path):
         _mark_parser_pipeline_entry()
-        return _invoke_parser(JsonParser.process_post, post_path, http_response)
+        return _invoke_parser(generic.process_post, post_path, http_response)
     raise UnsupportedRouteException('unsupported Facebook route')
 
 
@@ -262,7 +259,7 @@ def _mark_parser_pipeline_entry() -> None:
         service_metrics.record_request()
 
 
-def _run_tracked_request(
+def run_tracked_request(
     path: str,
 ) -> tuple[str, CffiResponse | None, bool]:
     with _parser_pipeline_scope() as state:
@@ -274,7 +271,7 @@ def _run_tracked_request(
         return result, selected_response, state['entered']
 
 
-def _record_scrape_error(error: Exception) -> None:
+def record_scrape_error(error: Exception) -> None:
     if isinstance(error, UnsupportedRouteException):
         return
     parser_entered = bool(getattr(error, 'parser_pipeline_entered', False))
@@ -310,6 +307,7 @@ def _run_request(path: str) -> tuple[str, CffiResponse | None]:
             raise
         return result, cffi.selected_get_response or cffi.last_get_response
 
+
 def _normalize_request_path(path: str) -> str:
     parsed = urlparse(path)
     route = parsed.path.strip('/')
@@ -337,21 +335,21 @@ def _normalize_request_path(path: str) -> str:
 
 def _handle_facebook_path(path: str) -> str:
     prefetched_response = None
-    comment_target = CommentParser.get_target(path)
+    comment_target = comment.get_target(path)
     if comment_target is None and '3' in request.query.getall('type'):
         try:
             _mark_parser_pipeline_entry()
-            return _successful_embed(PhotocomParser.process_post(path))
+            return _successful_embed(photocom.process_post(path))
         except PARSER_FALLBACK_EXCEPTIONS:
             pass
 
     path = _normalize_request_path(path)
     share_source_path = None
-    if Utils.is_share_path(path):
+    if is_share_path(path):
         share_source_path = path
-        path, prefetched_response = Utils.resolve_share_link(path)
+        path, prefetched_response = resolve_share_link(path)
         if comment_target is not None:
-            resolved_target = CommentParser.get_target(path)
+            resolved_target = comment.get_target(path)
             if resolved_target is not None and resolved_target != comment_target:
                 raise NoDataException(
                     'Share resolution changed the requested comment',
@@ -380,7 +378,7 @@ def _handle_resolved_facebook_path(
     try:
         parsed_post = _dispatch_post(path, prefetched_response)
     except ROUTE_FALLBACK_EXCEPTIONS as primary_error:
-        if CommentParser.get_target(path) is not None:
+        if comment.get_target(path) is not None:
             raise
         if not _allow_route_upstream_fallback(primary_error):
             raise
@@ -388,7 +386,7 @@ def _handle_resolved_facebook_path(
             try:
                 _mark_parser_pipeline_entry()
                 parsed_post = _invoke_parser(
-                    JsonParser.process_post,
+                    generic.process_post,
                     share_source_path,
                     prefetched_response,
                 )

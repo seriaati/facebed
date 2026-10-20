@@ -2,17 +2,42 @@ import gzip
 import hashlib
 import logging
 import re
+import threading
 import traceback
 from urllib.parse import urlparse
 
 from curl_cffi.requests import Response as CffiResponse
-from discord_webhook import DiscordEmbed
+from discord_webhook import DiscordEmbed, DiscordWebhook
 
 from facebed.client import cffi
 from facebed.config import get_config
-from facebed.errors import NoDataException
-from facebed.parsers.json_parser import JsonParser
-from facebed.utils import Utils
+from facebed.errors import (
+    NoDataException,
+)
+from facebed.urls import ensure_full_url, facebook_path_segments, is_control_path
+
+
+def warn(msg: str = None, file_content: bytes = None, filename: str = None, embed: DiscordEmbed = None):
+    def worker():
+        wh = get_config().notifier_webhook
+        if not wh or not wh.startswith('https://discord.com/api/webhooks/'):
+            return
+        try:
+            webhook = DiscordWebhook(
+                url=wh,
+                content=msg,
+                rate_limit_retry=True,
+                timeout=30,
+            )
+            if embed:
+                webhook.add_embed(embed)
+            if file_content is not None and filename:
+                webhook.add_file(file=file_content, filename=filename)
+            webhook.execute()
+        except Exception:
+            logging.warning(f"couldn't warn about {msg or embed}")
+
+    threading.Thread(target=worker, daemon=True).start()
 
 
 def failed_post_type(path: str, upstream_response: CffiResponse | None, reason: str) -> str:
@@ -26,8 +51,8 @@ def failed_post_type(path: str, upstream_response: CffiResponse | None, reason: 
     if upstream_response is not None:
         paths.insert(0, str(upstream_response.url))
     for candidate in paths:
-        parts = Utils.facebook_path_segments(candidate)
-        if not parts or Utils.is_control_path(candidate, 'login', 'checkpoint', 'recover'):
+        parts = facebook_path_segments(candidate)
+        if not parts or is_control_path(candidate, 'login', 'checkpoint', 'recover'):
             continue
         if parts[0] == 'groups':
             return 'group_post'
@@ -48,7 +73,7 @@ def failed_post_type(path: str, upstream_response: CffiResponse | None, reason: 
     return 'unknown'
 
 
-def _send_dump_report(
+def send_dump_report(
     path: str,
     http_response: CffiResponse | None = None,
 ) -> None:
@@ -60,7 +85,7 @@ def _send_dump_report(
         raw_bytes = bytes(http_response.content or b'')
         filename = re.sub(r'[^a-zA-Z0-9]', '_', path)[:80] + '_dump.html'
         display_path = '/' + path.lstrip('/')
-        url = JsonParser.ensure_full_url(path)
+        url = ensure_full_url(path)
         embed = DiscordEmbed(
             title='manual dump report',
             description=f'🔗 [`{display_path}`]({url})\n📋 Manual dump requested by user',
@@ -70,7 +95,7 @@ def _send_dump_report(
         embed.add_embed_field(name='Response Size', value=f'{len(raw_bytes)} bytes', inline=True)
         embed.add_embed_field(name='Final URL', value=str(getattr(http_response, 'url', url)), inline=True)
         embed.add_embed_field(name='Status', value=str(getattr(http_response, 'status_code', 'unknown')), inline=True)
-        Utils.warn(file_content=raw_bytes, filename=filename, embed=embed)
+        warn(file_content=raw_bytes, filename=filename, embed=embed)
         logging.info('dump report sent for /%s', path)
     except Exception:
         logging.error("couldn't dump /%s\n%s", path, traceback.format_exc())
@@ -119,7 +144,7 @@ def _upstream_redirect_chain(http_response: CffiResponse) -> str:
     )
 
 
-def _send_restricted_page_report(
+def send_restricted_page_report(
     origin_path: str,
     error: NoDataException,
     http_response: CffiResponse | None = None,
@@ -129,7 +154,7 @@ def _send_restricted_page_report(
         return
 
     try:
-        origin_url = JsonParser.ensure_full_url(origin_path)
+        origin_url = ensure_full_url(origin_path)
         reason = str(getattr(error, 'reason_code', 'no_data'))
         title = {
             'login_wall': 'Facebook login wall detected',
@@ -198,7 +223,7 @@ def _send_restricted_page_report(
                     inline=False,
                 )
 
-        Utils.warn(
+        warn(
             file_content=file_content,
             filename=filename,
             embed=embed,
