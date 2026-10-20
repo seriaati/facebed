@@ -23,20 +23,53 @@ Using regex:
 
 # For developers and maintainers
 
-## Deployment
+## Running
 
-1. Install `python>=3.12` with `pip` and `virtualenv`
-2. Clone this repository
-3. Copy `start.example.py` to `start.py` and edit the `PYTHON` variable to point to your venv or 
-system installation (not recommended)
-4. Copy `user_config.example.py` to `user_config.py` and edit the self-explanatory options
-5. Start the `start.py` script
+Requires [uv](https://docs.astral.sh/uv/) and Python 3.12+.
 
-## Start command and virtual environment
-I recommend running `facebed` in a virtual environment if you don't want to pollute your
-system-wide python installation.
+```sh
+uv sync
+uv run python -m facebed -c config.yaml
+```
 
-Copy `start.example.py` to `start.py` and edit the `PYTHON` variable to the full path of
-your python interpreter. Two examples are provided for running `facebed` in a `venv` virtual environment on
-Windows and Linux. After that, you can start `facebed` by running `python start.py` using your 
-system's python since that script doesn't have any external dependencies.
+Without `-c`, every option uses its default.
+
+## Configuration
+
+`config.yaml` is optional, and every key in it is optional:
+
+```yaml
+host: 0.0.0.0
+port: 9812
+threads: 8                  # requests served concurrently
+timezone: 7                 # UTC offset in hours (5.5 works), or an IANA name like Asia/Bangkok to follow DST
+banned_users: []            # Facebook user/page ids whose posts are not embedded
+notifier_webhook: ''        # Discord webhook for login walls, dumps and cookie expiry
+proxy: ''                   # e.g. http://user:pass@host:port
+user_agent: ''              # browser UA that issued cookies.json, sent with logged-in requests
+cookies_file: cookies.json  # exported browser cookies for posts that need a login
+log_level: INFO
+```
+
+Unknown keys and wrong types are rejected at startup.
+
+`cookies.json` is a cookie export (a list of objects with `name`, `value` and
+`expirationDate`) from a logged-in browser. Requests try logged out first and
+only use the cookies when Facebook withholds the post.
+
+## Docker
+
+```sh
+docker build -t facebed .
+docker run -p 9812:9812 -v ./config:/facebed/config:ro facebed
+```
+
+The image reads `/facebed/config/config.yaml`. Mount `cookies.json` at
+`/facebed/cookies.json`, or point `cookies_file` into the config directory.
+
+## Development
+
+```sh
+uv run ruff check .        # lint
+uv run ruff check --fix .  # apply safe autofixes
+```

@@ -179,3 +179,7 @@ TOBEFIXED/
 .discord-secret
 *.jq
 research/
+
+# local runtime data and secrets
+cookies.json
+config/
