@@ -1,6 +1,7 @@
 import re
 import threading
 from contextlib import contextmanager
+from typing import NoReturn
 from urllib.parse import parse_qs, urlencode, urlparse
 
 from bottle import request, response
@@ -51,12 +52,7 @@ def _invoke_parser(parser, post_path: str, http_response: CffiResponse | None = 
 
 PARSER_FALLBACK_EXCEPTIONS = (
     NoDataException,
-    ParseException,
-    KeyError,
-    TypeError,
-    IndexError,
-    ValueError,
-    AttributeError,
+    ParseException,  # includes payload-shape errors, converted by errors.shape_errors
 )
 ROUTE_FALLBACK_EXCEPTIONS = (*PARSER_FALLBACK_EXCEPTIONS, UpstreamException)
 
@@ -64,29 +60,21 @@ ROUTE_FALLBACK_EXCEPTIONS = (*PARSER_FALLBACK_EXCEPTIONS, UpstreamException)
 def _allow_route_upstream_fallback(error: Exception) -> bool:
     if isinstance(error, UnsupportedRouteException):
         return False
-    if isinstance(error, NoDataException) and getattr(error, 'terminal', False):
+    if isinstance(error, NoDataException) and error.terminal:
         return False
     return not isinstance(error, UpstreamException) or error.status_code in {
         403, 404, 500, 502, 503, 504,
     }
 
 
-def _as_parser_error(error: Exception) -> FacebedException:
-    if isinstance(error, FacebedException):
-        return error
-    return ParseException(f'{type(error).__name__}: {error}')
-
-
-def _prefer_parser_error(first: Exception, second: Exception) -> FacebedException:
-    first = _as_parser_error(first)
-    second = _as_parser_error(second)
+def _prefer_parser_error(first: FacebedException, second: FacebedException) -> FacebedException:
     for error in (first, second):
         if isinstance(error, UnsupportedRouteException):
             return error
     for error in (first, second):
         if (
             isinstance(error, NoDataException)
-            and getattr(error, 'reason_code', 'no_data') != 'no_data'
+            and error.reason_code != 'no_data'
         ):
             return error
     if isinstance(second, ParseException) and second.html:
@@ -94,6 +82,12 @@ def _prefer_parser_error(first: Exception, second: Exception) -> FacebedExceptio
     if isinstance(first, ParseException) and first.html:
         return first
     return second
+
+
+def _raise_preferred(first: FacebedException, second: FacebedException) -> NoReturn:
+    preferred = _prefer_parser_error(first, second)
+    # chain the discarded attempt so its traceback isn't lost
+    raise preferred from (second if preferred is first else first)
 
 
 def _parse_with_generic(parser, post_path: str, http_response: CffiResponse | None = None) -> ParsedPost:
@@ -105,7 +99,7 @@ def _parse_with_generic(parser, post_path: str, http_response: CffiResponse | No
         try:
             return _invoke_parser(generic.process_post, post_path, http_response)
         except PARSER_FALLBACK_EXCEPTIONS as second_error:
-            raise _prefer_parser_error(first_error, second_error)
+            _raise_preferred(first_error, second_error)
 
 
 def _parse_video_path(post_path: str, http_response: CffiResponse | None = None) -> ParsedPost:
@@ -184,9 +178,7 @@ def _parse_video_path(post_path: str, http_response: CffiResponse | None = None)
         except ROUTE_FALLBACK_EXCEPTIONS as watch_error:
             if generic_post is not None:
                 return generic_post
-            raise _prefer_parser_error(
-                _prefer_parser_error(reel_error, generic_error), watch_error
-            )
+            _raise_preferred(_prefer_parser_error(reel_error, generic_error), watch_error)
 
 
 def _ensure_facebook_page_target(post_path: str) -> None:
@@ -393,7 +385,7 @@ def _handle_resolved_facebook_path(
             except ROUTE_FALLBACK_EXCEPTIONS as share_error:
                 if not _allow_route_upstream_fallback(share_error):
                     raise
-                raise _prefer_parser_error(primary_error, share_error)
+                _raise_preferred(primary_error, share_error)
         else:
             raise
     return _successful_embed(parsed_post)

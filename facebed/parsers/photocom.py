@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 from curl_cffi.requests import Response as CffiResponse
 
 from facebed import jq
-from facebed.errors import ParseException
+from facebed.errors import ParseException, shape_errors
 from facebed.formatting import get_top_reaction_ids, human_format
 from facebed.models.post import ParsedPost
 from facebed.parsers import photo
@@ -72,6 +72,7 @@ def get_attached_image_and_url(media_node: dict) -> tuple[str, str]:
     raise ParseException('Cannot process photocom (iau)')
 
 
+@shape_errors()
 def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,

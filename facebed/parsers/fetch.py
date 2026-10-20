@@ -7,7 +7,7 @@ from curl_cffi.requests import Response as CffiResponse
 from facebed.client import cffi
 from facebed.config import get_config
 from facebed.cookies import acc
-from facebed.errors import ParseException, UnsupportedRouteException, UpstreamException
+from facebed.errors import SHAPE_ERRORS, ParseException, UnsupportedRouteException, UpstreamException
 from facebed.parsers.probe import (
     PROBE_HAS_DATA,
     PROBE_LOGIN_WALL,
@@ -110,3 +110,5 @@ def fetch_page(
             e.html = raw_html
             e.url = url
         raise
+    except SHAPE_ERRORS as e:
+        raise ParseException(f'{type(e).__name__}: {e}', html=raw_html, url=url) from e

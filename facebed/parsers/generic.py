@@ -15,6 +15,7 @@ from facebed.errors import (
     FacebedException,
     NoDataException,
     ParseException,
+    shape_errors,
 )
 from facebed.formatting import get_top_reaction_ids
 from facebed.models.post import ParsedPost, banned
@@ -425,6 +426,7 @@ def get_root_node(post_json: dict, requested_ids: list[str] | None = None) -> di
     raise ParseException('Cannot process post')
 
 
+@shape_errors()
 def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,

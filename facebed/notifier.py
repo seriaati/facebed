@@ -156,7 +156,7 @@ def send_restricted_page_report(
 
     try:
         origin_url = ensure_full_url(origin_path)
-        reason = str(getattr(error, 'reason_code', 'no_data'))
+        reason = error.reason_code
         title = {
             'login_wall': 'Facebook login wall detected',
             'private_group_post_unavailable': 'Restricted Facebook page detected',

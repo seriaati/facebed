@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from curl_cffi.requests import Response as CffiResponse
 
 from facebed import jq
-from facebed.errors import NoDataException, ParseException
+from facebed.errors import NoDataException, ParseException, shape_errors
 from facebed.models.post import ParsedPost
 from facebed.parsers import embed_extract, generic
 from facebed.parsers.blocks import get_json_blocks
@@ -108,6 +108,7 @@ def get_single_image(
     return str(prefetch[0]['uri'])
 
 
+@shape_errors()
 def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,

@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from curl_cffi.requests import Response as CffiResponse
 
 from facebed import jq
-from facebed.errors import NoDataException, ParseException
+from facebed.errors import NoDataException, ParseException, shape_errors
 from facebed.formatting import get_top_reaction_ids, human_format
 from facebed.models.post import ParsedPost
 from facebed.parsers import reels
@@ -84,6 +84,7 @@ def get_date(
     raise ParseException('cannot find date')
 
 
+@shape_errors()
 def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,

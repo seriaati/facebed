@@ -12,6 +12,7 @@ from facebed.errors import (
     NoDataException,
     ParseException,
     UnsupportedRouteException,
+    shape_errors,
 )
 from facebed.formatting import get_top_reaction_ids, human_format
 from facebed.models.post import ParsedPost, banned
@@ -171,6 +172,7 @@ def get_counts(comment: dict) -> tuple[str | None, str | None, tuple[str, ...]]:
     )
 
 
+@shape_errors()
 def process_post(post_path: str, http_response: CffiResponse | None = None) -> ParsedPost:
     target = get_target(post_path)
     if target is None:

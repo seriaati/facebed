@@ -7,7 +7,7 @@ from facebed import jq
 from facebed.client import cffi
 from facebed.config import get_config
 from facebed.constants import DISCORD_VIDEO_MAX_BYTES
-from facebed.errors import NoDataException, ParseException, UpstreamException
+from facebed.errors import NoDataException, ParseException, UpstreamException, shape_errors
 from facebed.formatting import human_format
 from facebed.models.post import ParsedPost, banned
 from facebed.parsers.blocks import get_json_blocks
@@ -227,6 +227,7 @@ def get_raw_reaction_counts(
     return likes, cmts, shares
 
 
+@shape_errors()
 def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,

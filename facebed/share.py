@@ -9,7 +9,6 @@ from facebed.constants import SHARE_BODY_USER_AGENT, SHARE_HEAD_USER_AGENT
 from facebed.errors import (
     NoDataException,
     ShareResolutionException,
-    UnsupportedRouteException,
     UpstreamException,
 )
 from facebed.parsers.probe import (
@@ -37,24 +36,21 @@ def resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
     with cffi.request_scope():
         try:
             resolved_path, prefetched_response = _resolve_share_link(path)
-            resolved_url = ensure_full_url(resolved_path)
-            if not urlparse(resolved_url).path.strip('/'):
-                raise ShareResolutionException(
-                    'Facebook share resolution did not produce a post target'
-                )
-            return resolved_path, prefetched_response
         except ShareResolutionException:
-            raise
-        except UnsupportedRouteException:
             raise
         except NoDataException as exc:
             raise ShareResolutionException(
                 str(exc),
-                getattr(exc, 'upstream_response', None),
+                exc.upstream_response,
                 count_as_error=False,
-                reason_code=getattr(exc, 'reason_code', 'share_resolution_failed'),
-                terminal=getattr(exc, 'terminal', False),
+                reason_code=exc.reason_code,
+                terminal=exc.terminal,
             ) from exc
+        if not urlparse(ensure_full_url(resolved_path)).path.strip('/'):
+            raise ShareResolutionException(
+                'Facebook share resolution did not produce a post target'
+            )
+        return resolved_path, prefetched_response
 
 
 def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:

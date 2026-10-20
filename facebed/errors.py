@@ -1,9 +1,12 @@
 
+from contextlib import contextmanager
+
 from curl_cffi.requests import Response as CffiResponse
 
 
 class FacebedException(Exception):
     reason_code = 'facebed_error'
+    upstream_response: CffiResponse | None = None
 
 
 class NoDataException(FacebedException):
@@ -79,3 +82,16 @@ class UpstreamException(FacebedException):
         self.retry_after = None
         if response is not None:
             self.retry_after = response.headers.get('Retry-After')
+
+
+# Facebook payload drift surfaces as lookup and type errors deep inside the parsers
+SHAPE_ERRORS = (KeyError, TypeError, IndexError, ValueError, AttributeError)
+
+
+@contextmanager
+def shape_errors():
+    """Report payload-shape errors as ParseException, so the pipeline can fall back to another parser."""
+    try:
+        yield
+    except SHAPE_ERRORS as e:
+        raise ParseException(f'{type(e).__name__}: {e}') from e
