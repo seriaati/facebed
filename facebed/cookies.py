@@ -10,9 +10,10 @@ class Cookies:
     # facebook's login session; the rest are cosmetic and expire much sooner
     SESSION_COOKIES = ('c_user', 'xs')
 
-    def __init__(self, fn: str):
+    def __init__(self) -> None:
         self.cookies: list = []
 
+    def load(self, fn: str) -> None:
         if not os.path.isfile(fn):
             logging.warning('cookies.json not found, non incognito-viewable posts will NOT work')
             return
@@ -38,4 +39,4 @@ class Cookies:
         return {k['name']: k['value'] for k in self.cookies if k['name'] not in expired}
 
 
-acc = Cookies('cookies.json')
+acc = Cookies()  # loaded from config.cookies_file at startup

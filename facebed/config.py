@@ -1,6 +1,9 @@
+import logging
 import os
-from dataclasses import dataclass, field, fields
-from typing import Any, Self, get_origin
+from dataclasses import dataclass
+from datetime import timedelta, timezone, tzinfo
+from typing import Any, Self
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
 
@@ -9,19 +12,47 @@ class ConfigError(Exception):
     pass
 
 
+# accepted YAML types per option; exact match on purpose, a bool is not accepted where an int is expected
+_YAML_TYPES: dict[str, tuple[type, ...]] = {
+    'host': (str,),
+    'port': (int,),
+    'timezone': (int, float, str),
+    'banned_users': (list,),
+    'notifier_webhook': (str,),
+    'proxy': (str,),
+    'user_agent': (str,),
+    'cookies_file': (str,),
+    'log_level': (str,),
+}
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Config:
     host: str = '0.0.0.0'
     port: int = 9812
-    timezone: int = 7
-    banned_users: list[str] = field(default_factory=list)
+    # fixed UTC offset in hours (7, 5.5) or an IANA zone name ('Asia/Bangkok') to follow DST
+    timezone: int | float | str = 7
+    banned_users: frozenset[str] = frozenset()
     notifier_webhook: str = ''
     proxy: str = ''
     user_agent: str = ''
+    cookies_file: str = 'cookies.json'
+    log_level: str = 'INFO'
 
     def __post_init__(self) -> None:
-        if self.timezone < -12 or self.timezone > 14:
+        self.tzinfo()
+        if self.log_level.upper() not in logging.getLevelNamesMapping():
+            raise ConfigError(f'invalid log level {self.log_level}')
+
+    def tzinfo(self) -> tzinfo:
+        if isinstance(self.timezone, str):
+            try:
+                return ZoneInfo(self.timezone)
+            except (ZoneInfoNotFoundError, ValueError) as e:
+                raise ConfigError(f'invalid timezone {self.timezone}') from e
+        if not -12 <= self.timezone <= 14:
             raise ConfigError('invalid timezone offset')
+        return timezone(timedelta(hours=self.timezone))
 
     @classmethod
     def from_dict(cls, data: Any) -> Self:
@@ -29,12 +60,14 @@ class Config:
             return cls()
         if not isinstance(data, dict):
             raise ConfigError('config file must contain a mapping of options')
-        expected = {f.name: get_origin(f.type) or f.type for f in fields(cls)}
         for key, value in data.items():
-            # exact type match on purpose: a bool is not accepted where an int is expected
-            if key not in expected or type(value) is not expected[key]:
+            if type(value) not in _YAML_TYPES.get(key, ()):
                 raise ConfigError(f'invalid config entry {key}')
-        return cls(**data)
+        banned = data.get('banned_users', [])
+        if not all(type(user) in (str, int) for user in banned):
+            raise ConfigError('invalid config entry banned_users, expected a list of user ids')
+        # unquoted ids load from YAML as ints, while Facebook ids are compared as strings
+        return cls(**{**data, 'banned_users': frozenset(map(str, banned))})
 
     @classmethod
     def load(cls, path: str) -> Self:

@@ -562,7 +562,7 @@ def process_post(
         post_author_name = story.author_name
         link_header = f'{post_author_name}' + (f' • {post_group_name}' if post_group_name else '')
 
-        if story.author_id in get_config().banned_users:
+        if str(story.author_id) in get_config().banned_users:
             return banned(post_url)
 
         # TODO: support normal /watch here

@@ -16,13 +16,11 @@ def main():
         config = Config.load(args.config) if args.config else Config()
     except ConfigError as e:
         logging.error(e)
-        exit(1)
+        sys.exit(1)
     set_config(config)
+    logging.getLogger().setLevel(config.log_level.upper())
 
-    if sys.version_info.minor < 12:
-        logging.error('python 3.12+ required, see https://docs.python.org/3.12/whatsnew/3.12.html#pep-701-syntactic-formalization-of-f-strings')
-        exit(1)
-
+    acc.load(config.cookies_file)
     # checked here rather than on load so warn sees the config
     if acc.get_cookies() and acc.expired():
         logging.info(f'ignoring expired non-session cookies: {", ".join(acc.expired())}')

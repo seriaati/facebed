@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from urllib.parse import quote as _quote_
 
 from yattag import indent
@@ -26,8 +26,9 @@ def prettify(txt: str) -> str:
 def timestamp_to_str(ts: int) -> str:
     if ts < 0:
         return ''
-    dt = datetime.fromtimestamp(ts, timezone(timedelta(hours=get_config().timezone)))
-    tztext = dt.strftime('%z')[:3]
+    dt = datetime.fromtimestamp(ts, get_config().tzinfo())
+    offset = dt.strftime('%z')
+    tztext = offset[:3] if offset[3:] == '00' else f'{offset[:3]}:{offset[3:]}'
     return '⌚ ' + dt.strftime('%Y/%m/%d %H:%M:%S ') + f'UTC{tztext}'
 
 

@@ -184,7 +184,7 @@ def process_post(post_path: str, http_response: CffiResponse | None = None) -> P
         if not isinstance(author.get('name'), str) or not author['name']:
             raise ParseException('Facebook comment has no author name')
         url = ensure_full_url(post_path)
-        if author.get('id') in get_config().banned_users:
+        if str(author.get('id')) in get_config().banned_users:
             return banned(url)
         body = comment.get('body')
         if body is None:

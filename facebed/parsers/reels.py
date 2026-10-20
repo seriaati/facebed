@@ -279,7 +279,7 @@ def process_post(
         )
         likes, cmts, shares = (human_format(x) for x in raw_counts)
 
-        if owner_info['id'] in get_config().banned_users:
+        if str(owner_info['id']) in get_config().banned_users:
             return banned(post_url)
 
         parsed = ParsedPost(op_name, post_text, [], post_url, post_date, likes, cmts, shares, [video_link])
