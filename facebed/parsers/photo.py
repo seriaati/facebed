@@ -1,7 +1,6 @@
 import base64
 import logging
 import re
-import traceback
 from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
@@ -19,6 +18,8 @@ from facebed.parsers.identity import (
     select_requested_candidate,
 )
 from facebed.urls import ensure_full_url
+
+logger = logging.getLogger(__name__)
 
 
 def select_node(
@@ -170,5 +171,5 @@ def process_post(
             if interaction_node is not None:
                 parsed.counts = embed_extract.raw_counts(interaction_node)
         except Exception:
-            logging.warning(f'component embed extraction failed for {post_path}:\n{traceback.format_exc()}')
+            logger.warning('component embed extraction failed for %s', post_path, exc_info=True)
         return parsed

@@ -30,6 +30,8 @@ from facebed.urls import (
     normalize_facebook_path,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
     with cffi.request_scope():
@@ -64,7 +66,7 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
         and source_parts[0].casefold() == 'share'
         and source_parts[1].casefold() == 'v'
     )
-    logging.info(f'resolving share link {url}')
+    logger.info('resolving share link %s', url)
     head_response = None
     try:
         head_response = cffi.head(
@@ -73,7 +75,7 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
             _check_status=False,
         )
     except UpstreamException as exc:
-        logging.warning('share HEAD failed for %s: %s', url, exc)
+        logger.warning('share HEAD failed for %s: %s', url, exc)
 
     needs_get = head_response is None
     if head_response is not None:
@@ -115,7 +117,7 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
             or not head_usable
         )
         if not needs_get:
-            logging.info(f'resolved to {head_response.url}')
+            logger.info('resolved to %s', head_response.url)
             return head_path, None
 
     def inspect_direct(response: CffiResponse):
@@ -214,7 +216,7 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
             declared_target,
             response_is_facebook,
         ) = inspect_direct(direct_response)
-    logging.info(f'resolved to {direct_url}')
+    logger.info('resolved to %s', direct_url)
     if not response_is_facebook:
         if declared_target:
             if is_group_landing_target(direct_path):

@@ -5,6 +5,8 @@ import time
 
 from facebed.notifier import warn
 
+logger = logging.getLogger(__name__)
+
 
 class Cookies:
     # facebook's login session; the rest are cosmetic and expire much sooner
@@ -15,12 +17,12 @@ class Cookies:
 
     def load(self, fn: str) -> None:
         if not os.path.isfile(fn):
-            logging.warning('cookies.json not found, non incognito-viewable posts will NOT work')
+            logger.warning('%s not found, non incognito-viewable posts will NOT work', fn)
             return
 
         with open(fn) as f:
             self.cookies = json.load(f)
-            logging.info(f'loaded {len(self.cookies)} cookies from {fn}')
+            logger.info('loaded %s cookies from %s', len(self.cookies), fn)
 
     # noinspection PyMethodMayBeStatic
     def is_valid_cookie(self, entry: dict) -> bool:
@@ -32,7 +34,7 @@ class Cookies:
     def get_cookies(self) -> dict[str, str]:
         expired = self.expired()
         if any(name in self.SESSION_COOKIES for name in expired):
-            logging.warning(f'session cookies expired ({", ".join(expired)}), requests will be logged out')
+            logger.warning('session cookies expired (%s), requests will be logged out', ', '.join(expired))
             warn('@everyone cookies expired')
             return {}
 

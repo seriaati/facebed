@@ -2,7 +2,6 @@ import base64
 import contextlib
 import logging
 import re
-import traceback
 from collections.abc import Callable
 from urllib.parse import urlparse
 
@@ -39,6 +38,8 @@ from facebed.urls import (
     facebook_path_segments,
     is_share_path,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_post_json(
@@ -572,5 +573,5 @@ def process_post(
         try:
             embed_extract.fill_post(parsed, post_json, story_dict)
         except Exception:
-            logging.warning(f'component embed extraction failed for {post_path}:\n{traceback.format_exc()}')
+            logger.warning('component embed extraction failed for %s', post_path, exc_info=True)
         return parsed

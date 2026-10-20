@@ -23,21 +23,27 @@ def _readable_log_url(url: str) -> str:
 
 class ConsoleFormatter(logging.Formatter):
     def format(self, record):
-        formatted = re.sub(
-            r'https?://\S+', lambda match: _readable_log_url(match[0]),
-            super().format(record), flags=re.IGNORECASE,
-        )
+        formatted = super().format(record)
+        if '%' not in formatted:
+            return formatted
         return re.sub(
-            r'https://(?:www\.)?(?:facebook|facebed)\.com(?![\w.@:-])/*',
-            '/', formatted, flags=re.IGNORECASE,
+            r'https?://\S+', lambda match: _readable_log_url(match[0]),
+            formatted, flags=re.IGNORECASE,
         )
 
 
-_console_handler = logging.StreamHandler()
-_console_handler.setFormatter(ConsoleFormatter(
-    '[%(levelname)s] [%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
-))
-logging.basicConfig(level=logging.INFO, handlers=[_console_handler])
+def setup_logging(level: str = 'INFO') -> None:
+    handler = logging.StreamHandler()
+    handler.setFormatter(ConsoleFormatter(
+        '[%(levelname)s] [%(asctime)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+    ))
+    # third-party libraries only surface warnings; facebed's own level is configurable
+    logging.basicConfig(level=logging.WARNING, handlers=[handler], force=True)
+    set_log_level(level)
+
+
+def set_log_level(level: str) -> None:
+    logging.getLogger('facebed').setLevel(level.upper())
 
 
 def readable_log_title(title: str) -> str:

@@ -20,6 +20,8 @@ from facebed.parsers.probe import (
 )
 from facebed.urls import ensure_full_url, is_facebook_url
 
+logger = logging.getLogger(__name__)
+
 
 @contextmanager
 def fetch_page(
@@ -76,7 +78,7 @@ def fetch_page(
     }:
         cookies = acc.get_cookies()
         if cookies:
-            logging.info(f'no data logged out for {post_path}, retrying with cookies')
+            logger.info('no data logged out for %s, retrying with cookies', post_path)
             # cookies are tied to the browser that issued them, so match its UA
             headers = {'user-agent': get_config().user_agent} if get_config().user_agent else {}
             http_response = cffi.get(

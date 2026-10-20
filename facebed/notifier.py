@@ -3,7 +3,6 @@ import hashlib
 import logging
 import re
 import threading
-import traceback
 from urllib.parse import urlparse
 
 from curl_cffi.requests import Response as CffiResponse
@@ -15,6 +14,8 @@ from facebed.errors import (
     NoDataException,
 )
 from facebed.urls import ensure_full_url, facebook_path_segments, is_control_path
+
+logger = logging.getLogger(__name__)
 
 
 def warn(msg: str = None, file_content: bytes = None, filename: str = None, embed: DiscordEmbed = None):
@@ -35,7 +36,7 @@ def warn(msg: str = None, file_content: bytes = None, filename: str = None, embe
                 webhook.add_file(file=file_content, filename=filename)
             webhook.execute()
         except Exception:
-            logging.warning(f"couldn't warn about {msg or embed}")
+            logger.warning("couldn't warn about %s", msg or embed)
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -79,7 +80,7 @@ def send_dump_report(
 ) -> None:
     http_response = http_response or cffi.selected_get_response or cffi.last_get_response
     if http_response is None:
-        logging.info('no body-bearing GET captured for dump /%s', path)
+        logger.info('no body-bearing GET captured for dump /%s', path)
         return
     try:
         raw_bytes = bytes(http_response.content or b'')
@@ -96,9 +97,9 @@ def send_dump_report(
         embed.add_embed_field(name='Final URL', value=str(getattr(http_response, 'url', url)), inline=True)
         embed.add_embed_field(name='Status', value=str(getattr(http_response, 'status_code', 'unknown')), inline=True)
         warn(file_content=raw_bytes, filename=filename, embed=embed)
-        logging.info('dump report sent for /%s', path)
+        logger.info('dump report sent for /%s', path)
     except Exception:
-        logging.error("couldn't dump /%s\n%s", path, traceback.format_exc())
+        logger.exception("couldn't dump /%s", path)
 
 
 def _discord_text(value: object, limit: int = 1024) -> str:
@@ -228,15 +229,11 @@ def send_restricted_page_report(
             filename=filename,
             embed=embed,
         )
-        logging.info(
+        logger.info(
             'restricted page report queued reason=%s url=%s bytes=%s',
             reason,
             origin_url,
             len(file_content) if file_content is not None else 0,
         )
     except Exception:
-        logging.error(
-            "couldn't report restricted page /%s\n%s",
-            origin_path,
-            traceback.format_exc(),
-        )
+        logger.exception("couldn't report restricted page /%s", origin_path)

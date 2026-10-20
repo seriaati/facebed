@@ -11,6 +11,8 @@ from facebed.constants import DEFAULT_FACEBOOK_USER_AGENT
 from facebed.errors import UpstreamException
 from facebed.urls import is_facebook_url
 
+logger = logging.getLogger(__name__)
+
 
 class CFFI:
     impersonate: str = 'chrome146'
@@ -175,7 +177,7 @@ class CFFI:
                     status_code = int(upstream_response.status_code)
                     location = upstream_response.headers.get('Location')
                     if current_url != final_url:
-                        logging.info(
+                        logger.info(
                             'upstream %s %s -> %s status=%s redirect_hop=%s bytes=%s attempt=%s',
                             current_method,
                             current_url,
@@ -252,7 +254,7 @@ class CFFI:
                 return upstream_response
             except RequestsError as exc:
                 last_error = exc
-                logging.warning(
+                logger.warning(
                     'upstream %s %s failed on attempt %s/%s: %s',
                     method, url, attempt, self.max_attempts, exc,
                 )

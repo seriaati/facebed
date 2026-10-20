@@ -1,5 +1,4 @@
 import logging
-import traceback
 
 from bs4 import BeautifulSoup
 from curl_cffi.requests import Response as CffiResponse
@@ -22,6 +21,8 @@ from facebed.parsers.identity import (
     select_requested_field,
 )
 from facebed.urls import ensure_full_url, is_safe_media_url
+
+logger = logging.getLogger(__name__)
 
 
 def too_big_for_discord(link: str) -> bool:
@@ -294,5 +295,5 @@ def process_post(
             r_likes, r_cmts, r_shares = (int(x) if str(x).isdigit() else None for x in raw_counts)
             parsed.counts = (r_likes, r_cmts, r_shares)
         except Exception:
-            logging.warning(f'component embed extraction failed for {post_path}:\n{traceback.format_exc()}')
+            logger.warning('component embed extraction failed for %s', post_path, exc_info=True)
         return parsed

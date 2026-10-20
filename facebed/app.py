@@ -1,7 +1,6 @@
 import json
 import logging
 import re
-import traceback
 from functools import wraps
 
 import crawleruseragents
@@ -21,6 +20,8 @@ from facebed.notifier import (
 )
 from facebed.pipeline import record_scrape_error, run_tracked_request
 
+logger = logging.getLogger(__name__)
+
 app: Bottle = Bottle()
 
 
@@ -30,7 +31,7 @@ def media_redirect(key: str, slot: str, ext: str):
     try:
         url = media_store.resolve(key, slot)
     except Exception:
-        logging.warning(f'media refetch failed for /m/{key}/{slot}.{ext}:\n{traceback.format_exc()}')
+        logger.warning('media refetch failed for /m/%s/%s.%s', key, slot, ext, exc_info=True)
         url = ''
     if not url:
         response.status = 404
@@ -84,7 +85,7 @@ def index(path: str):
         if selected_response is None:
             selected_response = getattr(exc, 'upstream_response', None)
         reason = getattr(exc, 'reason_code', 'internal_error')
-        logging.warning(
+        logger.warning(
             'embed fallback type=%s reason=%s url=%s detail=%s',
             failed_post_type(original_path, selected_response, reason),
             reason,
@@ -124,7 +125,7 @@ def log_to_logger(fn):
     def _log_to_logger(*argsz, **kwargs):
         actual_response = fn(*argsz, **kwargs)
         title = readable_log_title(request.environ.get('facebed.post_title', ''))
-        logging.info(
+        logger.info(
             '%s %s %s %s%s', request.remote_addr, request.method,
             request.url, response.status, f' {title}' if title else '',
         )

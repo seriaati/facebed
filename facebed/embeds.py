@@ -1,6 +1,5 @@
 import json
 import logging
-import traceback
 from html import escape
 
 from bottle import request
@@ -14,6 +13,8 @@ from facebed.formatting import (
     timestamp_to_str,
 )
 from facebed.models.post import ParsedPost
+
+logger = logging.getLogger(__name__)
 
 
 def format_error_message_embed(original_url: str) -> str:
@@ -35,7 +36,7 @@ def with_component_embed(html: str, post: ParsedPost) -> str:
         origin = '{}://{}'.format(*request.urlparts[:2])
         payload = component_embed.render(post, origin)
     except Exception:
-        logging.warning(f'component embed failed for {post.url}:\n{traceback.format_exc()}')
+        logger.warning('component embed failed for %s', post.url, exc_info=True)
         return html
     if not payload:
         return html
