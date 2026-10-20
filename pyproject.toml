@@ -15,3 +15,7 @@ dependencies = [
     "yattag==1.16.1",
 ]
 
+[dependency-groups]
+dev = [
+    "ruff>=0.17.1",
+]

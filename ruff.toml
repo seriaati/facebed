@@ -1,0 +1,33 @@
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "A",        # shadowed builtins
+    "C4",       # comprehensions
+    "G",        # logging call formatting (no f-strings / % in log calls)
+    "LOG",      # logging misuse
+    "PIE",
+    "RUF",
+    "SIM",
+    "RET",
+    "TRY",      # exception handling
+    "BLE",      # blind `except Exception`
+    "PLE", "PLW",
+    "PLR1722",  # exit() instead of sys.exit()
+    "PLC0415",  # function-level imports, usually hiding an import cycle
+    "T20",      # print()
+]
+ignore = [
+    "E501",    # long lines; no formatter is enforced yet
+    "TRY003",  # long messages in raise are fine here
+    "TRY300",  # return-in-try vs else: block is a style choice
+]
+
+[lint.isort]
+combine-as-imports = true
