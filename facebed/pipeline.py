@@ -1,15 +1,15 @@
 import re
 import threading
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import NoReturn
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from bottle import request, response
+from bottle import request
 from curl_cffi.requests import Response as CffiResponse
 
 from facebed.client import cffi
 from facebed.constants import WWWFB
-from facebed.embeds import format_full_post_embed
 from facebed.errors import (
     FacebedException,
     NoDataException,
@@ -219,14 +219,6 @@ def _dispatch_post(post_path: str, http_response: CffiResponse | None = None) ->
     raise UnsupportedRouteException('unsupported Facebook route')
 
 
-def _successful_embed(parsed_post: ParsedPost) -> str:
-    response.status = 200
-    response.headers['Cache-Control'] = 'public, max-age=900'
-    result = format_full_post_embed(parsed_post)
-    request.environ['facebed.post_title'] = parsed_post.author_name
-    return result
-
-
 _parser_pipeline_local = threading.local()
 
 
@@ -251,22 +243,24 @@ def _mark_parser_pipeline_entry() -> None:
         service_metrics.record_request()
 
 
-def run_tracked_request(
-    path: str,
-) -> tuple[str, CffiResponse | None, bool]:
+@dataclass
+class RequestOutcome:
+    post: ParsedPost | None
+    error: Exception | None
+    # the upstream page the attempt ended on, for error reports and dumps
+    selected_response: CffiResponse | None
+    parser_entered: bool
+
+
+def run_tracked_request(path: str) -> RequestOutcome:
     with _parser_pipeline_scope() as state:
-        try:
-            result, selected_response = _run_request(path)
-        except Exception as exc:
-            setattr(exc, 'parser_pipeline_entered', state['entered'])
-            raise
-        return result, selected_response, state['entered']
+        post, error, selected_response = _run_request(path)
+        return RequestOutcome(post, error, selected_response, state['entered'])
 
 
-def record_scrape_error(error: Exception) -> None:
+def record_scrape_error(error: Exception, parser_entered: bool) -> None:
     if isinstance(error, UnsupportedRouteException):
         return
-    parser_entered = bool(getattr(error, 'parser_pipeline_entered', False))
     if not parser_entered and isinstance(error, ShareResolutionException):
         if error.count_as_error:
             service_metrics.record_error()
@@ -276,28 +270,20 @@ def record_scrape_error(error: Exception) -> None:
     service_metrics.record_error()
 
 
-def _attach_attempt_response(
-    error: Exception,
-    selected_response: CffiResponse | None,
-) -> None:
-    if (
-        getattr(error, 'upstream_response', None) is None
-        and selected_response is not None
-    ):
-        setattr(error, 'upstream_response', selected_response)
-    setattr(error, 'selected_response', selected_response)
-
-
-def _run_request(path: str) -> tuple[str, CffiResponse | None]:
-    _ensure_facebook_page_target(path)
+def _run_request(path: str) -> tuple[ParsedPost | None, Exception | None, CffiResponse | None]:
+    try:
+        _ensure_facebook_page_target(path)
+    except UnsupportedRouteException as error:
+        return None, error, None
     with cffi.request_scope():
         try:
-            result = _handle_facebook_path(path)
-        except Exception as exc:
+            parsed_post = _handle_facebook_path(path)
+        except Exception as error:  # noqa: BLE001 -- request boundary: any failure gets the fallback embed
             selected_response = cffi.selected_get_response or cffi.last_get_response
-            _attach_attempt_response(exc, selected_response)
-            raise
-        return result, cffi.selected_get_response or cffi.last_get_response
+            if selected_response is None and isinstance(error, FacebedException):
+                selected_response = error.upstream_response
+            return None, error, selected_response
+        return parsed_post, None, cffi.selected_get_response or cffi.last_get_response
 
 
 def _normalize_request_path(path: str) -> str:
@@ -325,13 +311,13 @@ def _normalize_request_path(path: str) -> str:
     return path
 
 
-def _handle_facebook_path(path: str) -> str:
+def _handle_facebook_path(path: str) -> ParsedPost:
     prefetched_response = None
     comment_target = comment.get_target(path)
     if comment_target is None and '3' in request.query.getall('type'):
         try:
             _mark_parser_pipeline_entry()
-            return _successful_embed(photocom.process_post(path))
+            return photocom.process_post(path)
         except PARSER_FALLBACK_EXCEPTIONS:
             pass
 
@@ -365,7 +351,7 @@ def _handle_resolved_facebook_path(
     path: str,
     prefetched_response: CffiResponse | None = None,
     share_source_path: str | None = None,
-) -> str:
+) -> ParsedPost:
 
     try:
         parsed_post = _dispatch_post(path, prefetched_response)
@@ -388,4 +374,4 @@ def _handle_resolved_facebook_path(
                 _raise_preferred(primary_error, share_error)
         else:
             raise
-    return _successful_embed(parsed_post)
+    return parsed_post
