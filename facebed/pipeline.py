@@ -9,7 +9,6 @@ from bottle import request
 from curl_cffi.requests import Response as CffiResponse
 
 from facebed.client import cffi
-from facebed.constants import WWWFB
 from facebed.errors import (
     FacebedException,
     NoDataException,
@@ -23,25 +22,7 @@ from facebed.models.post import ParsedPost
 from facebed.parsers import comment, generic, photo, photocom, reels, video_watch
 from facebed.parsers.identity import get_terminal_video_id
 from facebed.share import resolve_share_link
-from facebed.urls import is_share_path, normalize_facebook_path
-
-
-def _is_facebook_post_url(url: str) -> bool:
-    if urlparse(url).netloc:
-        url = normalize_facebook_path(url)
-    wwwfb = f'{WWWFB}/'
-    username_pattern = '[a-zA-Z0-9-._]*'  # also covers /watch
-    full_url = f'{wwwfb}{url}'
-    parsed_url = urlparse(full_url)
-
-    is_group_post = re.match(f'^/groups/{username_pattern}', parsed_url.path)
-    is_permalink = parsed_url.path.startswith('/permalink.php')
-    is_story = parsed_url.path.startswith('/story.php')
-    is_post = re.match(f'/{username_pattern}/posts', parsed_url.path)
-    is_photo = parsed_url.path.startswith('/photo')
-    is_photo_album = re.match(f'/{username_pattern}/photos(?:/|$)', parsed_url.path)
-
-    return is_permalink or is_post or is_story or is_photo or is_photo_album or is_group_post
+from facebed.urls import is_facebook_host, is_generic_post_path, is_share_path, normalize_facebook_path
 
 
 def _invoke_parser(parser, post_path: str, http_response: CffiResponse | None = None):
@@ -185,7 +166,7 @@ def _ensure_facebook_page_target(post_path: str) -> None:
     parsed_url = urlparse(post_path)
     if parsed_url.netloc:
         hostname = (parsed_url.hostname or '').lower()
-        if hostname != 'facebook.com' and not hostname.endswith('.facebook.com'):
+        if not is_facebook_host(hostname):
             raise UnsupportedRouteException('refusing to fetch non-Facebook host')
 
 
@@ -213,7 +194,7 @@ def _dispatch_post(post_path: str, http_response: CffiResponse | None = None) ->
     if re.match(r'^/?watch(?:/|$)', parsed_path, re.IGNORECASE):
         _mark_parser_pipeline_entry()
         return _parse_with_generic(video_watch.process_post, post_path, http_response)
-    if _is_facebook_post_url(post_path):
+    if is_generic_post_path(post_path):
         _mark_parser_pipeline_entry()
         return _invoke_parser(generic.process_post, post_path, http_response)
     raise UnsupportedRouteException('unsupported Facebook route')

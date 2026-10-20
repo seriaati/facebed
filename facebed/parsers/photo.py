@@ -22,6 +22,10 @@ from facebed.urls import ensure_full_url
 logger = logging.getLogger(__name__)
 
 
+# narrower than identity.IDENTITY_FIELDS; widening it changes which interaction ids are collected
+PHOTO_IDENTITY_FIELDS = frozenset({'fbid', 'feedback_id', 'id', 'legacy_fbid', 'mf_story_key', 'post_id', 'story_fbid', 'top_level_post_id', 'video_id'})
+
+
 def select_node(
     candidates: list[dict],
     requested_ids: list[str],
@@ -119,10 +123,6 @@ def process_post(
         )
         content_node = get_content_node(html_parser, requested_ids)
         interaction_ids = list(requested_ids)
-        identity_keys = {
-            'id', 'video_id', 'post_id', 'story_fbid', 'fbid',
-            'legacy_fbid', 'top_level_post_id', 'mf_story_key', 'feedback_id',
-        }
         identity_sources = [content_node]
         for key in ('container_story', 'creation_story'):
             source = jq.find_first(content_node, key)
@@ -130,7 +130,7 @@ def process_post(
                 identity_sources.append(source)
         for source in identity_sources:
             for key, value in source.items():
-                if str(key).lower() in identity_keys and isinstance(value, (str, int)):
+                if str(key).lower() in PHOTO_IDENTITY_FIELDS and isinstance(value, (str, int)):
                     text = str(value)
                     interaction_ids.append(text)
                     try:

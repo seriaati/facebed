@@ -17,7 +17,7 @@ from facebed.errors import (
     ParseException,
     shape_errors,
 )
-from facebed.formatting import get_top_reaction_ids
+from facebed.formatting import get_top_reaction_ids, parse_count
 from facebed.models.post import ParsedPost, banned
 from facebed.models.story import Story
 from facebed.parsers import embed_extract, reels
@@ -26,6 +26,7 @@ from facebed.parsers.blocks import (
 )
 from facebed.parsers.fetch import fetch_page
 from facebed.parsers.identity import (
+    IDENTITY_FIELDS,
     contains_exact_id,
     contains_target_id,
     get_requested_ids,
@@ -37,6 +38,7 @@ from facebed.parsers.identity import (
 from facebed.urls import (
     ensure_full_url,
     facebook_path_segments,
+    is_facebook_host,
     is_share_path,
 )
 
@@ -156,6 +158,27 @@ def get_group_name(
     return ''
 
 
+def _nested_comment_total(lookup: Callable[[str], object]):
+    """total_count under comment_rendering_instance, else the one inside comments_count_summary_renderer."""
+    comments = None
+    cri = lookup('comment_rendering_instance')
+    if isinstance(cri, dict):
+        cnode = cri.get('comments')
+        if isinstance(cnode, dict):
+            comments = cnode.get('total_count')
+    if not comments:
+        ccsr = lookup('comments_count_summary_renderer')
+        if isinstance(ccsr, dict):
+            fb_inner = ccsr.get('feedback')
+            if isinstance(fb_inner, dict):
+                cri2 = fb_inner.get('comment_rendering_instance')
+                if isinstance(cri2, dict):
+                    cnode2 = cri2.get('comments')
+                    if isinstance(cnode2, dict):
+                        comments = cnode2.get('total_count')
+    return comments
+
+
 def get_interaction_counts(
     post_json: dict,
     requested_ids: list[str] | None = None,
@@ -178,21 +201,7 @@ def get_interaction_counts(
         shares = fb.get('i18n_share_count') or share_count or jq.find_first(fb, 'i18n_share_count') or jq.find_first(fb, 'share_count') or '0'
         comments = fb.get('total_comment_count') or jq.find_first(fb, 'total_comment_count')
         if not comments:
-            cri = fb.get('comment_rendering_instance')
-            if isinstance(cri, dict):
-                cnode = cri.get('comments')
-                if isinstance(cnode, dict):
-                    comments = cnode.get('total_count')
-            if not comments:
-                ccsr = fb.get('comments_count_summary_renderer')
-                if isinstance(ccsr, dict):
-                    fb_inner = ccsr.get('feedback')
-                    if isinstance(fb_inner, dict):
-                        cri2 = fb_inner.get('comment_rendering_instance')
-                        if isinstance(cri2, dict):
-                            cnode2 = cri2.get('comments')
-                            if isinstance(cnode2, dict):
-                                comments = cnode2.get('total_count')
+            comments = _nested_comment_total(fb.get)
         if not comments:
             comments = '0'
         return str(reactions), str(comments), str(shares)
@@ -216,17 +225,12 @@ def get_interaction_counts(
         return best
 
     requested_ids = [str(value) for value in (requested_ids or []) if value]
-    id_keys = {
-        'id', 'video_id', 'videoid', 'post_id', 'postid', 'story_fbid',
-        'storyfbid', 'fbid', 'legacy_fbid', 'story_id', 'storyid',
-        'top_level_post_id', 'mf_story_key', 'feedback_id',
-    }
     direct_feedback = post_json.get('feedback')
     for identity_source in (post_json, direct_feedback):
         if not isinstance(identity_source, dict):
             continue
         for key, item in identity_source.items():
-            if str(key).lower() not in id_keys:
+            if str(key).lower() not in IDENTITY_FIELDS:
                 continue
             if isinstance(item, (str, int)) and str(item):
                 requested_ids.append(str(item))
@@ -245,7 +249,7 @@ def get_interaction_counts(
                 own_ids: set[str] = set()
                 for key, item in value.items():
                     if (
-                        str(key).lower() not in id_keys
+                        str(key).lower() not in IDENTITY_FIELDS
                         or not isinstance(item, (str, int))
                     ):
                         continue
@@ -299,15 +303,8 @@ def get_interaction_counts(
                     rc = feedback.get('i18n_reaction_count')
                 if rc is None:
                     return -1
-                text = str(rc).strip().upper().replace(',', '')
-                multiplier = 1
-                if text.endswith(('K', 'M', 'B')):
-                    multiplier = {'K': 1_000, 'M': 1_000_000, 'B': 1_000_000_000}[text[-1]]
-                    text = text[:-1]
-                try:
-                    return float(text) * multiplier
-                except (TypeError, ValueError):
-                    return 0
+                score = parse_count(rc)
+                return 0 if score is None else score
 
             best = max(
                 contextual_feedbacks,
@@ -337,21 +334,7 @@ def get_interaction_counts(
     shares = jq.find_first(post_json, 'i18n_share_count') or jq.find_first(post_json, 'share_count') or '0'
     comments = jq.find_first(post_json, 'total_comment_count')
     if not comments:
-        cri = jq.find_first(post_json, 'comment_rendering_instance')
-        if isinstance(cri, dict):
-            cnode = cri.get('comments')
-            if isinstance(cnode, dict):
-                comments = cnode.get('total_count')
-        if not comments:
-            ccsr = jq.find_first(post_json, 'comments_count_summary_renderer')
-            if isinstance(ccsr, dict):
-                fb_inner = ccsr.get('feedback')
-                if isinstance(fb_inner, dict):
-                    cri2 = fb_inner.get('comment_rendering_instance')
-                    if isinstance(cri2, dict):
-                        cnode2 = cri2.get('comments')
-                        if isinstance(cnode2, dict):
-                            comments = cnode2.get('total_count')
+        comments = _nested_comment_total(lambda key: jq.find_first(post_json, key))
     if not comments:
         comments = '0'
 
@@ -518,19 +501,14 @@ def process_post(
         parsed_canonical = urlparse(canonical_url)
         canonical_host = (parsed_canonical.hostname or '').lower()
         validated_identity_ids = set(route_proven_ids or raw_ids)
-        identity_fields = {
-            'id', 'video_id', 'videoid', 'post_id', 'postid', 'story_fbid',
-            'storyfbid', 'fbid', 'legacy_fbid', 'story_id', 'storyid',
-            'top_level_post_id', 'mf_story_key', 'feedback_id',
-        }
         def collect_identity_ids(value) -> None:
             if not isinstance(value, dict):
                 return
             for key, item in value.items():
                 key_name = str(key).lower()
-                if key_name in identity_fields and isinstance(item, (str, int)):
+                if key_name in IDENTITY_FIELDS and isinstance(item, (str, int)):
                     validated_identity_ids.add(str(item))
-                elif key_name in identity_fields and isinstance(item, list):
+                elif key_name in IDENTITY_FIELDS and isinstance(item, list):
                     validated_identity_ids.update(
                         str(part) for part in item
                         if isinstance(part, (str, int))
@@ -540,10 +518,7 @@ def process_post(
         collect_identity_ids(story_dict)
         story_url_ids = set(get_requested_ids(story.url))
         canonical_ids = set(get_requested_ids(canonical_url))
-        if (
-            canonical_host == 'facebook.com'
-            or canonical_host.endswith('.facebook.com')
-        ) and canonical_ids.intersection(validated_identity_ids):
+        if is_facebook_host(canonical_host) and canonical_ids.intersection(validated_identity_ids):
             parts = [part for part in parsed_canonical.path.split('/') if part]
             if 'posts' in parts:
                 post_index = parts.index('posts')

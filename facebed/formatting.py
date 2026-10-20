@@ -44,6 +44,19 @@ def human_format(num):
     return str(num)
 
 
+def parse_count(value) -> float | None:
+    """Facebook count text ('1,234', '1.2K', 5) as a number, None when it isn't one."""
+    text = str(value).strip().upper().replace(',', '')
+    multiplier = 1
+    if text.endswith(('K', 'M', 'B')):
+        multiplier = {'K': 1_000, 'M': 1_000_000, 'B': 1_000_000_000}[text[-1]]
+        text = text[:-1]
+    try:
+        return float(text) * multiplier
+    except ValueError:
+        return None
+
+
 def get_top_reaction_ids(feedback: dict) -> tuple[str, ...]:
     if not isinstance(feedback, dict):
         return ()
@@ -75,20 +88,8 @@ def get_top_reaction_ids(feedback: dict) -> tuple[str, ...]:
         count = edge.get('reaction_count')
         if count is None:
             count = edge.get('i18n_reaction_count')
-        text = str(count or '').strip().upper().replace(',', '')
-        multiplier = 1
-        if text.endswith(('K', 'M', 'B')):
-            multiplier = {
-                'K': 1_000,
-                'M': 1_000_000,
-                'B': 1_000_000_000,
-            }[text[-1]]
-            text = text[:-1]
-        try:
-            numeric_count = float(text) * multiplier
-        except (TypeError, ValueError):
-            continue
-        if numeric_count <= 0:
+        numeric_count = parse_count(count)
+        if numeric_count is None or numeric_count <= 0:
             continue
 
         seen_ids.add(reaction_id)

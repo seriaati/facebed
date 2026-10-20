@@ -23,6 +23,7 @@ from facebed.urls import (
     ensure_full_url,
     facebook_path_segments,
     is_control_path,
+    is_facebook_host,
     is_group_landing_target,
     is_post_like_path,
     is_share_path,
@@ -79,10 +80,7 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
         head_path = normalize_facebook_path(head_url)
         parsed_head_url = urlparse(head_url)
         head_hostname = (parsed_head_url.hostname or '').lower()
-        head_is_facebook = (
-            head_hostname == 'facebook.com'
-            or head_hostname.endswith('.facebook.com')
-        )
+        head_is_facebook = is_facebook_host(head_hostname)
         head_is_group_landing = is_group_landing_target(head_path)
         head_is_post_like = is_post_like_path(head_path)
         head_parts = facebook_path_segments(head_path)
@@ -120,10 +118,7 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
         response_url = str(response.url)
         parsed_response_url = urlparse(response_url)
         response_host = (parsed_response_url.hostname or '').lower()
-        response_is_facebook = (
-            response_host == 'facebook.com'
-            or response_host.endswith('.facebook.com')
-        )
+        response_is_facebook = is_facebook_host(response_host)
         direct_url = response_url
         html_parser = BeautifulSoup(response.text, 'html.parser')
         canonical_candidates = []
@@ -139,10 +134,7 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
             candidate_path = normalize_facebook_path(candidate_url)
             parsed_candidate = urlparse(candidate_url)
             candidate_host = (parsed_candidate.hostname or '').lower()
-            candidate_is_facebook = (
-                candidate_host == 'facebook.com'
-                or candidate_host.endswith('.facebook.com')
-            )
+            candidate_is_facebook = is_facebook_host(candidate_host)
             candidate_path_only = parsed_candidate.path.strip('/')
             candidate_first_segment = candidate_path_only.partition('/')[0].lower()
             candidate_page = candidate_first_segment.removesuffix('.php')

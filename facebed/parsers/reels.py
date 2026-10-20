@@ -25,6 +25,10 @@ from facebed.urls import ensure_full_url, is_safe_media_url
 logger = logging.getLogger(__name__)
 
 
+# narrower than identity.IDENTITY_FIELDS; widening it changes which feedback nodes count as the reel's
+REEL_FEEDBACK_ID_FIELDS = frozenset({'fbid', 'id', 'legacy_fbid', 'post_id', 'postid', 'story_fbid', 'storyfbid', 'top_level_post_id', 'video_id', 'videoid'})
+
+
 def too_big_for_discord(link: str) -> bool:
     # discord downloads the whole video and drops the embed if that takes ~10s
     try:
@@ -141,17 +145,13 @@ def get_raw_reaction_counts(
         raise ParseException('Cannot process post (cn)')
 
     contextual_feedbacks: list[tuple[set[str], dict]] = []
-    id_keys = {
-        'id', 'video_id', 'videoid', 'post_id', 'postid', 'story_fbid',
-        'storyfbid', 'fbid', 'legacy_fbid', 'top_level_post_id',
-    }
 
     def walk(value, inherited_ids: set[str] | None = None):
         inherited_ids = inherited_ids or set()
         if isinstance(value, dict):
             own_ids = set()
             for key, item in value.items():
-                if str(key).lower() not in id_keys:
+                if str(key).lower() not in REEL_FEEDBACK_ID_FIELDS:
                     continue
                 if isinstance(item, (str, int)):
                     own_ids.add(str(item))

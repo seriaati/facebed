@@ -491,21 +491,14 @@ def contains_exact_id(value, requested_ids: list[str]) -> bool:
     if not requested_ids:
         return False
     if isinstance(value, dict):
-        id_fields = {
-            'id', 'video_id', 'videoid', 'post_id', 'postid', 'story_fbid',
-            'storyfbid', 'story_id', 'storyid', 'fbid', 'legacy_fbid', 'top_level_post_id',
-            'mf_story_key', 'feedback_id',
-        }
         for key, item in value.items():
-            if str(key).lower() in id_fields and isinstance(item, (str, int)):
-                if str(item) in requested_ids:
-                    return True
-            if str(key).lower() in id_fields and isinstance(item, list):
-                if any(
-                    isinstance(part, (str, int)) and str(part) in requested_ids
-                    for part in item
-                ):
-                    return True
+            if str(key).lower() in IDENTITY_FIELDS and isinstance(item, (str, int)) and str(item) in requested_ids:
+                return True
+            if str(key).lower() in IDENTITY_FIELDS and isinstance(item, list) and any(
+                isinstance(part, (str, int)) and str(part) in requested_ids
+                for part in item
+            ):
+                return True
             if contains_exact_id(item, requested_ids):
                 return True
     elif isinstance(value, list):
@@ -517,14 +510,13 @@ def contains_target_id(value, requested_ids: list[str]) -> bool:
     if not requested_ids:
         return False
     if isinstance(value, dict):
-        identity_urls = {
-            'url', 'wwwurl', 'permalink', 'permalink_url',
-            'shareable_url', 'canonical_url',
-        }
         for key, item in value.items():
-            if str(key).lower() in identity_urls and isinstance(item, str):
-                if set(get_requested_ids(item)).intersection(requested_ids):
-                    return True
+            if (
+                str(key).lower() in IDENTITY_URL_FIELDS
+                and isinstance(item, str)
+                and set(get_requested_ids(item)).intersection(requested_ids)
+            ):
+                return True
             if contains_target_id(item, requested_ids):
                 return True
         return contains_exact_id(value, requested_ids)
