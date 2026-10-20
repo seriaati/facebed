@@ -291,6 +291,6 @@ def get_headers() -> dict:
         'sec-fetch-user': '?1',
         'sec-gpc': '1',
         'upgrade-insecure-requests': '1',
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
+        'user-agent': DEFAULT_FACEBOOK_USER_AGENT,
     }
 

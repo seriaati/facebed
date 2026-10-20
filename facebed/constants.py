@@ -1,6 +1,7 @@
 from pathlib import Path
 
-DEFAULT_FACEBOOK_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
+# keep the Chrome major version in sync with CFFI.impersonate, or the UA contradicts the TLS fingerprint
+DEFAULT_FACEBOOK_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
 SHARE_HEAD_USER_AGENT = 'python-requests/2.32.3'
 SHARE_BODY_USER_AGENT = 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)'
 BASE_DIR = Path(__file__).resolve().parent
