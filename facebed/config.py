@@ -16,6 +16,7 @@ class ConfigError(Exception):
 _YAML_TYPES: dict[str, tuple[type, ...]] = {
     'host': (str,),
     'port': (int,),
+    'threads': (int,),
     'timezone': (int, float, str),
     'banned_users': (list,),
     'notifier_webhook': (str,),
@@ -30,6 +31,7 @@ _YAML_TYPES: dict[str, tuple[type, ...]] = {
 class Config:
     host: str = '0.0.0.0'
     port: int = 9812
+    threads: int = 8  # concurrent requests; each mostly waits on Facebook, so more than CPU cores is fine
     # fixed UTC offset in hours (7, 5.5) or an IANA zone name ('Asia/Bangkok') to follow DST
     timezone: int | float | str = 7
     banned_users: frozenset[str] = frozenset()
@@ -41,6 +43,8 @@ class Config:
 
     def __post_init__(self) -> None:
         self.tzinfo()
+        if self.threads < 1:
+            raise ConfigError('invalid config entry threads, expected at least 1')
         if self.log_level.upper() not in logging.getLevelNamesMapping():
             raise ConfigError(f'invalid log level {self.log_level}')
 

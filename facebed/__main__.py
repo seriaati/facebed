@@ -31,7 +31,11 @@ def main():
 
     logger.info('listening on %s:%s', config.host, config.port)
     app.install(log_to_logger)
-    app.run(host=config.host, port=config.port, quiet=True)
+    app.run(
+        server='waitress', host=config.host, port=config.port, quiet=True, threads=config.threads,
+        # waitress strips X-Forwarded-* by default; bottle builds the embed's media links from them behind a proxy
+        clear_untrusted_proxy_headers=False,
+    )
 
 
 if __name__ == '__main__':

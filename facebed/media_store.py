@@ -1,5 +1,6 @@
 """slot -> real media URL for the short /m/<key>/<slot> redirects in component embeds."""
 
+import threading
 from collections import OrderedDict
 
 from facebed.client import cffi
@@ -8,6 +9,7 @@ from facebed.parsers import generic, photo, reels, video_watch
 
 MAX_POSTS = 1000
 _slots: OrderedDict = OrderedDict()
+_lock = threading.Lock()  # requests run on several server threads
 
 
 def register(post: ParsedPost):
@@ -18,10 +20,11 @@ def register(post: ParsedPost):
     if isinstance(post.shared, dict):
         slots['qa'] = post.shared['avatar']
         slots.update({f'q{i}': url for i, (_, url) in enumerate(post.shared['media'][:10])})
-    _slots[post.key] = {k: v for k, v in slots.items() if v}
-    _slots.move_to_end(post.key)
-    while len(_slots) > MAX_POSTS:
-        _slots.popitem(last=False)
+    with _lock:
+        _slots[post.key] = {k: v for k, v in slots.items() if v}
+        _slots.move_to_end(post.key)
+        while len(_slots) > MAX_POSTS:
+            _slots.popitem(last=False)
 
 
 def refetch(key: str) -> ParsedPost:
@@ -36,7 +39,11 @@ def refetch(key: str) -> ParsedPost:
 
 
 def resolve(key: str, slot: str) -> str:
-    if key not in _slots:
+    with _lock:
+        known = key in _slots
+    if not known:
+        # fetched outside the lock so a slow refetch doesn't block other lookups
         with cffi.request_scope():
             register(refetch(key))
-    return _slots.get(key, {}).get(slot, '')
+    with _lock:
+        return _slots.get(key, {}).get(slot, '')
