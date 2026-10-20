@@ -305,18 +305,6 @@ def raise_for_probe_result(page_type: str, post_path: str) -> None:
         )
 
 
-def check_page_or_raise(
-    html_parser: BeautifulSoup,
-    post_path: str,
-    response_url: str | None = None,
-) -> str:
-    page_type = probe_page_type(
-        html_parser, post_path, response_url=response_url
-    )
-    raise_for_probe_result(page_type, post_path)
-    return page_type
-
-
 def _authentication_wall_reason(
     final_url: str,
     html_parser: BeautifulSoup,
