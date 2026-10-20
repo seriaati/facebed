@@ -1,6 +1,7 @@
 import gzip
 import hashlib
 import logging
+import queue
 import re
 import threading
 from urllib.parse import urlparse
@@ -18,27 +19,54 @@ from facebed.urls import ensure_full_url, facebook_path_segments, is_control_pat
 logger = logging.getLogger(__name__)
 
 
-def warn(msg: str = None, file_content: bytes = None, filename: str = None, embed: DiscordEmbed = None):
-    def worker():
-        wh = get_config().notifier_webhook
-        if not wh or not wh.startswith('https://discord.com/api/webhooks/'):
-            return
-        try:
-            webhook = DiscordWebhook(
-                url=wh,
-                content=msg,
-                rate_limit_retry=True,
-                timeout=30,
-            )
-            if embed:
-                webhook.add_embed(embed)
-            if file_content is not None and filename:
-                webhook.add_file(file=file_content, filename=filename)
-            webhook.execute()
-        except Exception:
-            logger.warning("couldn't warn about %s", msg or embed)
+# one delivery thread; when Discord is slow or down, excess notifications are dropped instead of piling up
+_queue: queue.Queue = queue.Queue(maxsize=100)
+_worker_lock = threading.Lock()
+_worker_started = threading.Event()
 
-    threading.Thread(target=worker, daemon=True).start()
+
+def notifier_enabled() -> bool:
+    return get_config().notifier_webhook.startswith('https://discord.com/api/webhooks/')
+
+
+def warn(
+    msg: str | None = None,
+    file_content: bytes | None = None,
+    filename: str | None = None,
+    embed: DiscordEmbed | None = None,
+) -> None:
+    if not notifier_enabled():
+        return
+    with _worker_lock:
+        if not _worker_started.is_set():
+            threading.Thread(target=_deliver_forever, name='facebed-notifier', daemon=True).start()
+            _worker_started.set()
+    try:
+        _queue.put_nowait((msg, file_content, filename, embed))
+    except queue.Full:
+        logger.warning('notifier queue full, dropping %s', msg or embed)
+
+
+def _deliver_forever() -> None:
+    while True:
+        _deliver(*_queue.get())
+
+
+def _deliver(msg: str | None, file_content: bytes | None, filename: str | None, embed: DiscordEmbed | None) -> None:
+    try:
+        webhook = DiscordWebhook(
+            url=get_config().notifier_webhook,
+            content=msg,
+            rate_limit_retry=True,
+            timeout=30,
+        )
+        if embed:
+            webhook.add_embed(embed)
+        if file_content is not None and filename:
+            webhook.add_file(file=file_content, filename=filename)
+        webhook.execute()
+    except Exception:  # noqa: BLE001 -- best effort; a failed notification must not stop the worker
+        logger.warning("couldn't warn about %s", msg or embed)
 
 
 def failed_post_type(path: str, upstream_response: CffiResponse | None, reason: str) -> str:
@@ -78,6 +106,8 @@ def send_dump_report(
     path: str,
     http_response: CffiResponse | None = None,
 ) -> None:
+    if not notifier_enabled():
+        return
     http_response = http_response or cffi.selected_get_response or cffi.last_get_response
     if http_response is None:
         logger.info('no body-bearing GET captured for dump /%s', path)
@@ -150,8 +180,7 @@ def send_restricted_page_report(
     error: NoDataException,
     http_response: CffiResponse | None = None,
 ) -> None:
-    wh = get_config().notifier_webhook
-    if not wh or not wh.startswith('https://discord.com/api/webhooks/'):
+    if not notifier_enabled():
         return
 
     try:

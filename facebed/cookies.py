@@ -14,6 +14,7 @@ class Cookies:
 
     def __init__(self) -> None:
         self.cookies: list = []
+        self._expiry_reported = False
 
     def load(self, fn: str) -> None:
         if not os.path.isfile(fn):
@@ -34,8 +35,11 @@ class Cookies:
     def get_cookies(self) -> dict[str, str]:
         expired = self.expired()
         if any(name in self.SESSION_COOKIES for name in expired):
-            logger.warning('session cookies expired (%s), requests will be logged out', ', '.join(expired))
-            warn('@everyone cookies expired')
+            # checked on every logged-in fetch, so report it once rather than per request
+            if not self._expiry_reported:
+                self._expiry_reported = True
+                logger.warning('session cookies expired (%s), requests will be logged out', ', '.join(expired))
+                warn('@everyone cookies expired')
             return {}
 
         return {k['name']: k['value'] for k in self.cookies if k['name'] not in expired}
