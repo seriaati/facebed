@@ -153,7 +153,7 @@ def get_media(comment: dict) -> tuple[list[str], list[str]]:
     return images, videos
 
 
-def get_counts(comment: dict) -> tuple[str, str, tuple[str, ...]]:
+def get_counts(comment: dict) -> tuple[str | None, str | None, tuple[str, ...]]:
     feedback = comment.get('feedback') or {}
     reactions = feedback.get('reaction_count')
     if isinstance(reactions, dict):
@@ -165,8 +165,8 @@ def get_counts(comment: dict) -> tuple[str, str, tuple[str, ...]]:
     replies = feedback.get('replies_fields') or feedback.get('replies') or {}
     reply_count = replies.get('total_count', replies.get('count'))
     return (
-        human_format(reactions) if reactions is not None else 'null',
-        human_format(reply_count) if reply_count is not None else 'null',
+        human_format(reactions) if reactions is not None else None,
+        human_format(reply_count) if reply_count is not None else None,
         get_top_reaction_ids(feedback),
     )
 
@@ -202,6 +202,6 @@ def process_post(post_path: str, http_response: CffiResponse | None = None) -> P
             raise ParseException('Facebook comment has no creation timestamp')
         return ParsedPost(
             author['name'] + ' (💬)', text.strip(), images, url,
-            timestamp, reactions, replies, 'null', videos,
+            timestamp, reactions, replies, None, videos,
             top_reaction_ids=reaction_ids,
         )

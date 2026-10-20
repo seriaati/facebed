@@ -103,7 +103,7 @@ def process_post(
 
         post_feedback = content_node['feedback']
         likes = human_format(post_feedback['reaction_count']['count'])
-        shares = 'null'
+        shares = None
         cmts = human_format(post_feedback['total_comment_count'])
         post_date = get_date(html_parser, content_node, requested_ids)
         top_reaction_ids = get_top_reaction_ids(post_feedback)

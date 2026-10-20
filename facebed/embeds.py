@@ -21,7 +21,7 @@ def format_error_message_embed(original_url: str) -> str:
 <html lang="">
 <head>
 <meta charset="UTF-8" />
-    <meta name="theme-color" content="#2c3048f" />
+    <meta name="theme-color" content="#2c3048" />
     <meta property="og:title" content="Log in or sign up to view"/>
     <meta property="og:description" content="See posts, photos and more on Facebook."/>
     <meta http-equiv="refresh" content="0;url={escape(quote(original_url), quote=True)}"/>

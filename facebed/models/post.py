@@ -11,9 +11,10 @@ class ParsedPost:
     url: str
     date: int
 
-    likes: str
-    comments: str
-    shares: str
+    # human-formatted counts, None when facebook doesn't expose one
+    likes: str | None
+    comments: str | None
+    shares: str | None
     video_links: list[str]
     top_reaction_ids: tuple[str, ...] = ()
 
@@ -35,4 +36,4 @@ def banned(url: str) -> ParsedPost:
     warn(f'banned embed attempted "{url}"')
     return ParsedPost('Banned', 'This user is banned by the operators of this embed server',
                       [], 'https://banned.facebook.com', -1,
-                      'null', 'null', 'null', [])
+                      None, None, None, [])

@@ -100,9 +100,9 @@ def get_top_reaction_ids(feedback: dict) -> tuple[str, ...]:
 
 
 def format_reactions_str(
-    likes: str,
-    cmts: str,
-    shares: str,
+    likes: str | None,
+    cmts: str | None,
+    shares: str | None,
     top_reaction_ids: tuple[str, ...] = (),
 ) -> str:
     emojis: list[str] = []
@@ -111,8 +111,7 @@ def format_reactions_str(
         if emoji and emoji not in emojis:
             emojis.append(emoji)
     reaction_prefix = ' '.join(emojis[:2]) if len(emojis) >= 2 else '❤️'
-    likes_str = f'{reaction_prefix} {likes}' if likes != 'null' else ''
-    cmts_str = f'💬 {cmts}' if cmts != 'null' else ''
-    shares_str = f'🔁 {shares}' if shares != 'null' else ''
-    fmt = ' • '.join([x for x in [likes_str, cmts_str, shares_str] if x]).replace(',', '.')
-    return fmt
+    likes_str = f'{reaction_prefix} {likes}' if likes is not None else ''
+    cmts_str = f'💬 {cmts}' if cmts is not None else ''
+    shares_str = f'🔁 {shares}' if shares is not None else ''
+    return ' • '.join([x for x in [likes_str, cmts_str, shares_str] if x]).replace(',', '.')

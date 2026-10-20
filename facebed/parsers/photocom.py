@@ -94,5 +94,5 @@ def process_post(
         )
 
         return ParsedPost(op_name, post_text, [post_image], post_url, post_time,
-                          human_format(reaction_count), 'null', 'null', [],
+                          human_format(reaction_count), None, None, [],
                           top_reaction_ids=top_reaction_ids)
