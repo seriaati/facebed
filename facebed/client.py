@@ -4,9 +4,7 @@ import time
 from contextlib import contextmanager
 from urllib.parse import urljoin, urlparse
 
-from curl_cffi.requests import RequestsError
-from curl_cffi.requests import Response as CffiResponse
-from curl_cffi.requests import Session as CffiSession
+from curl_cffi.requests import RequestsError, Response as CffiResponse, Session as CffiSession
 
 from facebed.config import get_config
 from facebed.constants import DEFAULT_FACEBOOK_USER_AGENT
@@ -17,7 +15,7 @@ from facebed.urls import is_facebook_url
 class CFFI:
     impersonate: str = 'chrome146'
     timeout: tuple[float, float] = (5.0, 20.0)
-    retry_statuses: set[int] = {429, 500, 502, 503, 504}
+    retry_statuses: frozenset[int] = frozenset({429, 500, 502, 503, 504})
     max_attempts: int = 2
 
     def __init__(self) -> None:
@@ -274,7 +272,7 @@ cffi = CFFI()
 
 
 def get_headers() -> dict:
-    headers = {
+    return {
         'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/jxl,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
         'accept-language': 'en-US,en;q=0.9',
         'cache-control': 'no-cache',
@@ -296,4 +294,3 @@ def get_headers() -> dict:
         'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
     }
 
-    return headers

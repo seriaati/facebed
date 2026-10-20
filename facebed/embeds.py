@@ -87,7 +87,7 @@ def format_full_post_embed(post: ParsedPost) -> str:
     if post.video_links:
         return format_reel_post_embed(post)
     image_links = post.image_links
-    image_counter = f'\ncontains 4+ images' if len(image_links) > 4 else ''
+    image_counter = '\ncontains 4+ images' if len(image_links) > 4 else ''
     image_links = image_links[:4]
     image_meta_tags = '\n'.join([
         f'<meta property="og:image" content="{escape(iu, quote=True)}"/>'

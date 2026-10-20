@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import logging
 import re
 import traceback
@@ -90,7 +91,7 @@ def get_post_json(
             score -= 20
         node_v2 = jq.find_first(bloc, 'node_v2')
         if isinstance(node_v2, dict):
-            if 'actors' in node_v2 and node_v2['actors']:
+            if node_v2.get('actors'):
                 score += 30
             if 'feedback' in node_v2 and isinstance(node_v2['feedback'], dict):
                 score += 15
@@ -98,7 +99,7 @@ def get_post_json(
                 score += 10
         data_blob = jq.find_first(bloc, 'data')
         if isinstance(data_blob, dict):
-            if 'actors' in data_blob and data_blob['actors']:
+            if data_blob.get('actors'):
                 score += 20
             if 'feedback' in data_blob and isinstance(data_blob['feedback'], dict):
                 score += 10
@@ -370,7 +371,7 @@ def get_root_node(post_json: dict, requested_ids: list[str] | None = None) -> di
             return {}
         if 'comet_ufi_summary_and_actions_renderer' in data_blob:
             return data_blob
-        elif 'node_v2' in data_blob and isinstance(data_blob['node_v2'], dict):
+        if 'node_v2' in data_blob and isinstance(data_blob['node_v2'], dict):
             node_v2 = data_blob['node_v2']
             if 'comet_sections' in node_v2 or 'creation_story' in node_v2:
                 return node_v2
@@ -427,11 +428,7 @@ def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,
 ) -> ParsedPost:
-    if http_response is None:
-        page = fetch_page(post_path)
-    else:
-        page = fetch_page(post_path, http_response=http_response)
-    with page as html_parser:
+    with fetch_page(post_path, http_response=http_response) as html_parser:
         raw_ids = get_requested_ids(post_path)
         requested_ids, route_proven_ids = get_target_ids(html_parser, post_path)
         effective_post_path = post_path
@@ -474,10 +471,8 @@ def process_post(
         post_date = -1
         t = jq.find_first(post_json, 'creation_time') or jq.find_first(post_json, 'created_time')
         if t:
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 post_date = int(t)
-            except (ValueError, TypeError):
-                pass
         if post_date == -1:
             blocks = get_json_blocks(html_parser)
             t = (
@@ -485,10 +480,8 @@ def process_post(
                 or select_requested_field(blocks, 'created_time', requested_ids)
             )
             if t:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     post_date = int(t)
-                except (ValueError, TypeError):
-                    pass
 
         story_dict = post_json
         if 'content' in post_json and isinstance(post_json['content'], dict) and 'story' in post_json['content']:
@@ -511,14 +504,12 @@ def process_post(
         if not story.video_links and re.search(
             r'/(?:reel|watch|videos|v)(?:/|$)', parsed_post_path, re.IGNORECASE
         ):
-            try:
+            with contextlib.suppress(FacebedException):
                 story.video_links.append(
                     reels.get_video_link(
                         html_parser, requested_ids=requested_ids
                     )
                 )
-            except FacebedException:
-                pass
         canonical = html_parser.find('link', attrs={'rel': 'canonical'})
         canonical_url = str(canonical.get('href', '')) if canonical else ''
         parsed_canonical = urlparse(canonical_url)

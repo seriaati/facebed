@@ -2,6 +2,8 @@
 
 
 
+import contextlib
+
 from facebed import jq
 from facebed.errors import FacebedException
 from facebed.models.post import ParsedPost
@@ -24,10 +26,8 @@ def media(story: dict) -> list[tuple[str, str]]:
         nodes = [(n or {}).get('media') or {} for n in (at.get('all_subattachments') or {}).get('nodes') or []]
         for m in nodes or [at.get('media') or {}]:
             if m.get('__typename') == 'Video':
-                try:
+                with contextlib.suppress(FacebedException):
                     out.append(('video', reels.get_video_link(None, user_node=m)))
-                except FacebedException:
-                    pass
             elif m.get('__typename') == 'Photo' and image_uri(m):
                 out.append(('image', image_uri(m)))
     return out

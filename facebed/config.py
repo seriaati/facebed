@@ -54,5 +54,5 @@ def get_config() -> Config:
 
 
 def set_config(config: Config) -> None:
-    global _config
+    global _config  # noqa: PLW0603 -- replaced once at startup, read everywhere via get_config()
     _config = config

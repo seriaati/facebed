@@ -36,7 +36,7 @@ def too_big_for_discord(link: str) -> bool:
 
 def get_video_link(
     html_parser: BeautifulSoup | None,
-    user_node: dict = None,
+    user_node: dict | None = None,
     requested_ids: list[str] | None = None,
 ) -> str:
     def work_node(node: dict) -> str:
@@ -230,11 +230,7 @@ def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,
 ) -> ParsedPost:
-    if http_response is None:
-        page = fetch_page(post_path)
-    else:
-        page = fetch_page(post_path, http_response=http_response)
-    with page as html_parser:
+    with fetch_page(post_path, http_response=http_response) as html_parser:
         requested_ids, _strong_ids = get_target_ids(html_parser, post_path)
         content_node = get_content_node(html_parser, requested_ids)
 

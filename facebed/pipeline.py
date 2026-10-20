@@ -58,7 +58,7 @@ PARSER_FALLBACK_EXCEPTIONS = (
     ValueError,
     AttributeError,
 )
-ROUTE_FALLBACK_EXCEPTIONS = PARSER_FALLBACK_EXCEPTIONS + (UpstreamException,)
+ROUTE_FALLBACK_EXCEPTIONS = (*PARSER_FALLBACK_EXCEPTIONS, UpstreamException)
 
 
 def _allow_route_upstream_fallback(error: Exception) -> bool:

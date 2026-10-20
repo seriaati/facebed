@@ -32,16 +32,15 @@ def timestamp_to_str(ts: int) -> str:
 
 
 def human_format(num):
-    if type(num) == int or re.match('^[0-9]+$', str(num)):
+    if type(num) is int or re.match('^[0-9]+$', str(num)):
         num = int(num)
-        num = float('{:.3g}'.format(num))
+        num = float(f'{num:.3g}')
         magnitude = 0
         while abs(num) >= 1000:
             magnitude += 1
             num /= 1000.0
-        return '{}{}'.format('{:f}'.format(num).rstrip('0').rstrip('.'), ['', 'K', 'M', 'B', 'T'][magnitude])
-    else:
-        return str(num)
+        return '{}{}'.format(f'{num:f}'.rstrip('0').rstrip('.'), ['', 'K', 'M', 'B', 'T'][magnitude])
+    return str(num)
 
 
 def get_top_reaction_ids(feedback: dict) -> tuple[str, ...]:

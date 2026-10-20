@@ -87,9 +87,8 @@ def select_comment(
             ):
                 continue
             parent = node.get('comment_direct_parent')
-            if reply_id and isinstance(parent, dict):
-                if get_comment_id(parent) != comment_id:
-                    continue
+            if reply_id and isinstance(parent, dict) and get_comment_id(parent) != comment_id:
+                continue
             feedback = node.get('feedback')
             urls = [node.get('url')]
             if isinstance(feedback, dict):

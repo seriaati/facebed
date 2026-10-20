@@ -76,11 +76,7 @@ def process_post(
     post_path: str,
     http_response: CffiResponse | None = None,
 ) -> ParsedPost:
-    if http_response is None:
-        page = fetch_page(post_path)
-    else:
-        page = fetch_page(post_path, http_response=http_response)
-    with page as html_parser:
+    with fetch_page(post_path, http_response=http_response) as html_parser:
         requested_ids, _route_proven_ids = get_target_ids(
             html_parser, post_path
         )

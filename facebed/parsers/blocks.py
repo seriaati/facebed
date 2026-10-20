@@ -7,7 +7,7 @@ from facebed import jq
 
 def get_json_blocks(html_parser: BeautifulSoup) -> list[dict]:
     script_elements = html_parser.find_all('script', attrs={'type': 'application/json'})
-        
+
     data_blocks = []
     for e in script_elements:
         try:

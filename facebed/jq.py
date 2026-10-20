@@ -38,8 +38,7 @@ def iterate(obj: dict, key: str, first: bool = False):
         if key in oo:
             if first:
                 return oo[key]
-            else:
-                result.append(oo[key])
+            result.append(oo[key])
     return result
 
 

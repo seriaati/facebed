@@ -552,9 +552,7 @@ def select_requested_field(blocks: list[dict], field_name: str, requested_ids: l
         for node in [block, *jq.nodes(block)]:
             if field_name not in node:
                 continue
-            if contains_exact_id(node, requested_ids):
-                matching.append((node, node[field_name]))
-            elif contains_target_id(node, requested_ids):
+            if contains_exact_id(node, requested_ids) or contains_target_id(node, requested_ids):
                 matching.append((node, node[field_name]))
     if matching:
         return min(matching, key=lambda item: len(str(item[0])))[1]

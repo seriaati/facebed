@@ -99,7 +99,7 @@ class Story:
 
         all_attachments = jq.find_all(post_json, 'attachment')
         for attachment_set in all_attachments:
-            if any([k.endswith('subattachments') for k in attachment_set]):
+            if any(k.endswith('subattachments') for k in attachment_set):
                 subsets = [v for k, v in attachment_set.items() if k.endswith('subattachments') and 'nodes' in v]
                 if subsets:
                     max_imgage_count = len(max(subsets, key=lambda it: len(it['nodes']))['nodes'])
