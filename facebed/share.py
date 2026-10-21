@@ -14,7 +14,6 @@ from facebed.errors import (
 from facebed.parsers.probe import (
     PROBE_HAS_DATA,
     PROBE_LOGIN_WALL,
-    PROBE_MARKETPLACE,
     PROBE_PRIVATE_GROUP,
     PROBE_UNKNOWN,
     probe_page_type,
@@ -259,7 +258,6 @@ def _resolve_share_link(path: str) -> tuple[str, CffiResponse | None]:
         direct_response
         if page_type in {
             PROBE_HAS_DATA,
-            PROBE_MARKETPLACE,
             PROBE_UNKNOWN,
         }
         else None,
