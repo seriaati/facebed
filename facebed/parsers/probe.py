@@ -34,7 +34,7 @@ PROBE_TARGET_IDENTITY_MISMATCH = 'target_identity_mismatch'
 PROBE_PRIVATE_GROUP = 'private_group_post_unavailable'
 PROBE_TARGET_VIDEO_MISSING = 'target_video_payload_missing'
 PROBE_UNSUPPORTED_PROFILE = 'unsupported_profile_target'
-PROBE_UNSUPPORTED_MARKETPLACE = 'unsupported_marketplace_target'
+PROBE_MARKETPLACE = 'marketplace_target'
 PROBE_UNSUPPORTED_MEDIA_SET = 'unsupported_media_set_target'
 
 
@@ -71,7 +71,7 @@ def probe_page_type(
         'comet.fbweb.CometProfileLoggedOutRoute':
             PROBE_UNSUPPORTED_PROFILE,
         'comet.fbweb.CometMarketplaceHoistedPermalinkRoute':
-            PROBE_UNSUPPORTED_MARKETPLACE,
+            PROBE_MARKETPLACE,
         'comet.fbweb.CometProfileLegacyAlbumViewRoute':
             PROBE_UNSUPPORTED_MEDIA_SET,
     }
@@ -276,8 +276,6 @@ def raise_for_probe_result(page_type: str, post_path: str) -> None:
     unsupported_messages = {
         PROBE_UNSUPPORTED_PROFILE:
             'Facebook share target is a profile rather than a post',
-        PROBE_UNSUPPORTED_MARKETPLACE:
-            'Facebook share target is a Marketplace listing',
         PROBE_UNSUPPORTED_MEDIA_SET:
             'Facebook share target is a media-set album',
     }

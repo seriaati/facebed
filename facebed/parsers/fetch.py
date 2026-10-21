@@ -11,8 +11,8 @@ from facebed.errors import SHAPE_ERRORS, ParseException, UnsupportedRouteExcepti
 from facebed.parsers.probe import (
     PROBE_HAS_DATA,
     PROBE_LOGIN_WALL,
+    PROBE_MARKETPLACE,
     PROBE_PRIVATE_GROUP,
-    PROBE_UNSUPPORTED_MARKETPLACE,
     PROBE_UNSUPPORTED_MEDIA_SET,
     PROBE_UNSUPPORTED_PROFILE,
     probe_page_type,
@@ -73,7 +73,7 @@ def fetch_page(
     if page_type not in {
         PROBE_HAS_DATA,
         PROBE_UNSUPPORTED_PROFILE,
-        PROBE_UNSUPPORTED_MARKETPLACE,
+        PROBE_MARKETPLACE,
         PROBE_UNSUPPORTED_MEDIA_SET,
     }:
         cookies = acc.get_cookies()

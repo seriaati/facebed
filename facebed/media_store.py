@@ -5,7 +5,7 @@ from collections import OrderedDict
 
 from facebed.client import cffi
 from facebed.models.post import ParsedPost
-from facebed.parsers import generic, photo, reels, video_watch
+from facebed.parsers import generic, marketplace, photo, reels, video_watch
 
 MAX_POSTS = 1000
 _slots: OrderedDict = OrderedDict()
@@ -35,6 +35,8 @@ def refetch(key: str) -> ParsedPost:
         return reels.process_post(f'reel/{ident}')
     if key[0] == 'w':
         return video_watch.process_post(f'watch/?v={ident}')
+    if key[0] == 'm':
+        return marketplace.process_post(f'marketplace/item/{ident}/')
     return photo.process_post(f'photo/?fbid={ident}')
 
 

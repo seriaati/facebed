@@ -50,7 +50,7 @@ def _successful_embed(parsed_post: ParsedPost) -> str:
     return format_full_post_embed(parsed_post)
 
 
-@app.route('/m/<key:re:[rwf]?[0-9]{1,25}>/<slot:re:(a|qa|q?[0-9])>.<ext:re:(jpg|mp4)>')
+@app.route('/m/<key:re:[rwfm]?[0-9]{1,25}>/<slot:re:(a|qa|q?[0-9])>.<ext:re:(jpg|mp4)>')
 def media_redirect(key: str, slot: str, ext: str):
     """Short media URLs for component embeds; the real (signed, ~1 KB) CDN URL would blow the byte cap."""
     try:

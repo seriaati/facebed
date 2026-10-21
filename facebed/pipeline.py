@@ -19,7 +19,7 @@ from facebed.errors import (
 )
 from facebed.metrics import service_metrics
 from facebed.models.post import ParsedPost
-from facebed.parsers import comment, generic, photo, photocom, reels, video_watch
+from facebed.parsers import comment, generic, marketplace, photo, photocom, reels, video_watch
 from facebed.parsers.identity import get_terminal_video_id
 from facebed.share import resolve_share_link
 from facebed.urls import is_facebook_host, is_generic_post_path, is_share_path, normalize_facebook_path
@@ -194,6 +194,9 @@ def _dispatch_post(post_path: str, http_response: CffiResponse | None = None) ->
     if re.match(r'^/?watch(?:/|$)', parsed_path, re.IGNORECASE):
         _mark_parser_pipeline_entry()
         return _parse_with_generic(video_watch.process_post, post_path, http_response)
+    if re.match(r'^/?marketplace/item/\d+', parsed_path, re.IGNORECASE):
+        _mark_parser_pipeline_entry()
+        return _invoke_parser(marketplace.process_post, post_path, http_response)
     if is_generic_post_path(post_path):
         _mark_parser_pipeline_entry()
         return _invoke_parser(generic.process_post, post_path, http_response)
